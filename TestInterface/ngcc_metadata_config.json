@@ -1,0 +1,9 @@
+{
+"hostip": "localhost",
+"port": 3306,
+"user": "root",
+"password": "",
+"database": "metadata2",
+"tablename": "metatb",
+"index": "E:/ZhangYuxin/us/us/customer_metadata_service/doc/NGCC/ZY300613720160624Y.XML"
+}
