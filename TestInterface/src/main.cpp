@@ -7,6 +7,7 @@
 #include "rapidjson/filereadstream.h"
 #include "rapidjson/filewritestream.h"
 #include "mysql.h"
+#include <sstream>
 
 int main()
 {
@@ -23,38 +24,21 @@ int main()
 									\"match\":[											\
 											  {\"field\":\"Producer\", \"mode\":1, \"pattern\": \"山西 地理 信息\"},  \
 											  {\"field\" :\"ConfidentialLevel\", \"mode\":2, \"pattern\": \"秘密\"}, \
-											  {\"field\": \"PixelBits\", \"mode\":16 ,\"pattern\":16}
+											  {\"field\": \"LongerRadius\", \"mode\": 2, \"pattern\": \"6378137.0000\"},\
+											  {\"field\": \"PixelBits\", \"mode\":16 ,\"pattern\":16},\
+											  {\"field\": \"HeightDatum\", \"mode\":2 ,\"pattern\":\"1985国家高程基准\"}\
 									],													\
 									\"range\":[											\
-											  {\"field\":\"GroundResolution\", \"min\":0, \"max\":3 },\
-											  {\"field\":\"ProduceDate\", \"min\":200902, \"max\":201809 }\
+											  {\"field\":\"GroundResolution\", \"min\":0, \"max\":1 },\
+											  {\"field\":\"ProduceDate\", \"min\":1448812800, \"max\":1548812800 }\
 									],													\
-									\"geometry\":{										\
-											 \"polygon\":[3650266, 662044, 3912570, 662044, 3912570, 724062]\
-									}													\
+									\"geometry\":[	\
+												\"POLYGON((3550266 662044, 3912570 662044, 3912570 724062, 3550266 662044))\",\
+												\"POLYGON((3550266 662044, 3912570 662044, 3912570 724062, 3550266 662044))\"\
+											 \
+									]													\
 								},														\
 								\"from\": 0,											\
-								\"size\":2											    \
-						   }";
-
-	std::string jsonStr1 = u8"{															\
-								\"query\":												\
-								{														\
-									\"match\":[											\
-											  {\"field\":\"Producer\", \"mode\":1, \"pattern\": \"山西 地理 信息\"},  \
-											  {\"field\" :\"ConfidentialLevel\", \"mode\":2, \"pattern\": \"秘密\"}, \
-											  {\"field\": \"PixelBits\", \"mode\":16 ,\"pattern\":16} \
-									],														\
-									\"range\":[											\
-												  {\"field\":\"GroundResolution\", \"min\":0, \"max\":3 },\
-												  {\"field\":\"ProduceDate\", \"min\":200902, \"max\":201809 }\
-										],													\
-									\"geometry\":{										\
-											 \"polygon\":[3550266, 662044, 3912570, 662044, 3912570, 724062]\
-									}	\
-								},\
-		\
-								\"from\": 1,											\
 								\"size\":100											    \
 						   }";
 
@@ -482,8 +466,10 @@ int main()
 	std::multimap< std::string, std::string > response_headers;
 	std::vector<uint8_t> response_body;
 
+
+
 	/*查询测试*/
-	for (auto itr = jsonStr.begin(); itr != jsonStr.end(); ++itr)
+	/*for (auto itr = jsonStr.begin(); itr != jsonStr.end(); ++itr)
 	{
 		request_body.push_back(*itr);
 	}
@@ -493,7 +479,7 @@ int main()
 	for (auto itr = response_body.begin(); itr != response_body.end(); ++itr)
 	{
 		std::cout << *itr;
-	}
+	}*/
 
 
 	/*重建测试*/
@@ -505,7 +491,7 @@ int main()
 
 
 	/*获取元数据记录测试*/
-	/*std::string jsons = "{\"ids\": [\"2\"], \"urls\": [\"E:/ZhangYuxin/us/us/customer_metadata_service/doc/NGCC/ZY300613720160624Y.XML\"]}";
+	/*std::string jsons = "{\"ids\": [\"2\", \"3\", \"4\"], \"urls\": [\"E:/ZhangYuxin/MysqlTest/MySqlTest/test/image/test4F.tif\", \"E:/ZhangYuxin/us/us/customer_metadata_service/doc/NGCC/GF1147121520160316Y.XML\", \"zz\"]}";
 	for (auto itr = jsons.begin(); itr != jsons.end(); ++itr)
 	{
 		request_body.push_back(*itr);
@@ -523,6 +509,42 @@ int main()
 		std::cout << *itr;
 	}*/
 
+	//int ret = us_cms_http_post_rebuild_addthread(path, headers, query_parameters, path_parameters, request_body, dest_endpoint, response_headers, response_body);
+
+
+	//int ret = create();
+
+	//int ret = create_chufaqi();
+
+
+	/*std::string str;
+	str.reserve(20);
+	const char *pc = str.c_str();
+	memset((char*)pc, 'z', 12);
+	pc += 12;
+	memset((char*)pc, 'a', 12);
+	pc += 12;
+	std::cout << str.c_str() << std::endl;*/
+
+
+	//rapidjson::StringBuffer strbuf;
+	//strbuf.Reserve(10);
+	//rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+	///*将获取到的结果写入json*/
+	//writer.StartObject();
+
+	//writer.Key("status");
+	//writer.String("abcdefghijklmnopqrstuvwxyz");
+
+	
+
+	MYSQL* pMysql;
+	MYSQL_STMT* stmtMysql = mysql_stmt_init(pMysql); //创建并返回一个MYSQL_STMT处理程序
+
+
+
+
+	std::cout << "\n\nfinish\n" << std::endl;
 
 	while (1) {}
 	return 0;
