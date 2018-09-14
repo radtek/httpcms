@@ -536,12 +536,6 @@ int main()
 	//writer.Key("status");
 	//writer.String("abcdefghijklmnopqrstuvwxyz");
 
-	
-
-	MYSQL* pMysql;
-	MYSQL_STMT* stmtMysql = mysql_stmt_init(pMysql); //创建并返回一个MYSQL_STMT处理程序
-
-
 
 
 	std::cout << "\n\nfinish\n" << std::endl;
