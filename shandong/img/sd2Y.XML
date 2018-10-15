@@ -1,0 +1,31 @@
+﻿<Metadatafile>
+  <BasicDataContent>
+    <MetaDataFileName>BY300613720160625Y.XML</MetaDataFileName>
+	<typename>卫片</typename>
+    <ProduceDate>201708</ProduceDate>
+    <GroundResolution>2.0</GroundResolution>
+    <DataFormat>tif</DataFormat>
+    <ImgRange>
+      <SouthWestAbs>1300153.84</SouthWestAbs>
+      <SouthWestOrd>3990000.54</SouthWestOrd>
+      <NorthWestAbs>1300153.84</NorthWestAbs>
+      <NorthWestOrd>4190000.14</NorthWestOrd>
+      <NorthEastAbs>1500153.44</NorthEastAbs>
+      <NorthEastOrd>4190000.14</NorthEastOrd>
+      <SouthEastAbs>1500153.44</SouthEastAbs>
+      <SouthEastOrd>3990000.54</SouthEastOrd>
+    </ImgRange>
+    <MathFoundation>
+      <LongerRadius>6378137.0000</LongerRadius>
+      <OblatusRatio>1/298.257222101</OblatusRatio>
+      <GeodeticDatum>2000国家大地坐标系</GeodeticDatum>
+      <MapProjection>高斯-克吕格投影</MapProjection>
+      <CentralMederian>111</CentralMederian>
+      <ZoneDivisionMode>6度带</ZoneDivisionMode>
+      <GaussKrugerZoneNo>19</GaussKrugerZoneNo>
+      <CoordinationUnit>米</CoordinationUnit>
+      <HeightSystem>正常高</HeightSystem>
+      <HeightDatum>1985国家高程基准</HeightDatum>
+    </MathFoundation>
+  </BasicDataContent>
+</Metadatafile>

@@ -8,6 +8,8 @@
 #include "rapidjson/filewritestream.h"
 #include "mysql.h"
 #include <sstream>
+#include <time.h>
+#include "../parsexml/pugixml.hpp"
 
 int main()
 {
@@ -22,20 +24,14 @@ int main()
 								\"query\":												\
 								{														\
 									\"match\":[											\
-											  {\"field\":\"Producer\", \"mode\":1, \"pattern\": \"山西 地理 信息\"},  \
-											  {\"field\" :\"ConfidentialLevel\", \"mode\":2, \"pattern\": \"秘密\"}, \
-											  {\"field\": \"LongerRadius\", \"mode\": 2, \"pattern\": \"6378137.0000\"},\
-											  {\"field\": \"PixelBits\", \"mode\":16 ,\"pattern\":16},\
-											  {\"field\": \"HeightDatum\", \"mode\":2 ,\"pattern\":\"1985国家高程基准\"}\
+											  {\"field\":\"Producer\", \"mode\":1, \"pattern\": \"山西 地理 信息\"}   \
 									],													\
 									\"range\":[											\
-											  {\"field\":\"GroundResolution\", \"min\":0, \"max\":1 },\
-											  {\"field\":\"ProduceDate\", \"min\":1448812800, \"max\":1548812800 }\
+											  {\"field\":\"GroundResolution\", \"min\":2, \"max\":3 },\
+											  {\"field\":\"ProduceDate\", \"min\" : 1448812800, \"max\" : 1548812800 }\
 									],													\
 									\"geometry\":[	\
-												\"POLYGON((3550266 662044, 3912570 662044, 3912570 724062, 3550266 662044))\",\
-												\"POLYGON((3550266 662044, 3912570 662044, 3912570 724062, 3550266 662044))\"\
-											 \
+\"POLYGON((115.0267 26.96242,122.9868 26.50936,123.8821 33.55816,115.3364 34.16074,115.0267 26.96242))\" \
 									]													\
 								},														\
 								\"from\": 0,											\
@@ -469,7 +465,7 @@ int main()
 
 
 	/*查询测试*/
-	/*for (auto itr = jsonStr.begin(); itr != jsonStr.end(); ++itr)
+	for (auto itr = jsonStr.begin(); itr != jsonStr.end(); ++itr)
 	{
 		request_body.push_back(*itr);
 	}
@@ -479,7 +475,7 @@ int main()
 	for (auto itr = response_body.begin(); itr != response_body.end(); ++itr)
 	{
 		std::cout << *itr;
-	}*/
+	}
 
 
 	/*重建测试*/
@@ -491,7 +487,7 @@ int main()
 
 
 	/*获取元数据记录测试*/
-	/*std::string jsons = "{\"ids\": [\"2\", \"3\", \"4\"], \"urls\": [\"E:/ZhangYuxin/MysqlTest/MySqlTest/test/image/test4F.tif\", \"E:/ZhangYuxin/us/us/customer_metadata_service/doc/NGCC/GF1147121520160316Y.XML\", \"zz\"]}";
+	/*std::string jsons = "{\"ids\": [\"2\", \"3\", \"4\"], \"urls\": [\"E:/ZhangYuxin/us/mine_test/zyxces/image/test1F.tif\", \"E:/ZhangYuxin/us/us/customer_metadata_service/doc/NGCC/GF1147121520160316Y.XML\", \"zz\"]}";
 	for (auto itr = jsons.begin(); itr != jsons.end(); ++itr)
 	{
 		request_body.push_back(*itr);
@@ -537,8 +533,75 @@ int main()
 	//writer.String("abcdefghijklmnopqrstuvwxyz");
 
 
+	//std::string hostip = "localhost";
+	//int port = 3306;
+	//std::string user = "root";
+	//std::string password = "";
+	//std::string database = "mytest_db";
+	//std::string tablename = "tutorials_tb1";
 
-	std::cout << "\n\nfinish\n" << std::endl;
+	///*初始化mysql*/
+	//MYSQL* pMysql = mysql_init(NULL);  //在程序使用Mysql的最开始必须调用mysql_int()初始化
+	//if (pMysql == NULL)
+	//{
+	//	std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+	//	std::cout << rntStr << std::endl;
+	//	return -1;
+	//}
+
+	////连接数据库服务器
+	//int arg = 1;
+	//mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	//if (mysql_real_connect(pMysql, hostip.c_str(),
+	//	user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	//{
+	//	std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+	//	std::cout << rntStr << std::endl;
+	//	return -1;
+	//}
+
+	//pre_statement preStmt;
+	//std::string sql = "select * from tutorials_tb1 where id = ?";  /*sql语句，?为预处理参数*/
+	//int ret = preStmt.init(pMysql, sql);  /*初始化预处理器，获取预处理参数的个数，并新建bind存储空间*/
+	//int idValue = 1;
+	//ret = preStmt.set_param_bind(0, idValue);  /*设置预处理参数*/
+
+	////绑定预处理参数，返回结果集
+	//ret = preStmt.query();  /*查询*/
+
+	//char buf[1024 * 4];
+	//unsigned long sizeField;
+	//ret = preStmt.set_param_result(0, MYSQL_TYPE_LONG, buf, 1024, &sizeField); /*id*/
+	//ret = preStmt.set_param_result(1, MYSQL_TYPE_STRING, buf + 1024, 1024, &sizeField); /*title*/
+	//ret = preStmt.set_param_result(2, MYSQL_TYPE_STRING, buf + 2048, 1024, &sizeField); /*author*/
+	//ret = preStmt.set_param_result(3, MYSQL_TYPE_TIMESTAMP, buf + 3072, 1024, &sizeField); /*date*/
+
+	//ret = preStmt.get_result();
+	//if (preStmt.fetch_result())
+	//{
+	//	std::string s(buf, 1024);
+	//	std::cout << s << std::endl;
+	//}
+
+
+	/*std::string host = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "";
+	std::string database = "metadata2";
+	std::string tablename = "ngcc_metadata";
+	int ret = ngcc_create_tb_trigger(host, port, user, password, database);*/
+
+	//std::cout << "\n\nfinish\n" << std::endl;
+
+	/*pugi::xml_document doc;
+	if (!doc.load_file("E:/test111Y.XML", pugi::parse_default, pugi::encoding_utf8))
+	{
+		std::cout << "load failed.." << std::endl;
+		while (1) {}
+	}*/
+
 
 	while (1) {}
 	return 0;

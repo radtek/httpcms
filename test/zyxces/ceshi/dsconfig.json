@@ -1,0 +1,10 @@
+{
+  "service":{
+    "bind_address":"0.0.0.0",
+    "port":5656,
+    "threadnum":4
+  },
+  "modules":[
+    {"name":"cms","path":"./uds_customer_metadata_module.dll"}
+  ]
+}

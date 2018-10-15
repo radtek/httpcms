@@ -200,3 +200,95 @@ int UsMySql::delete_data(std::string CoordinationUnit)
 {
 
 }
+
+
+int mysql_stmt()
+{
+	MYSQL* pMysql = mysql_init(NULL);
+	if (!pMysql) { return -1;}
+
+	/*设置断开重连*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	/*连接mysql服务器*/
+	if (mysql_real_connect(pMysql, "localhost",
+		"root", "123456", "test", 3306, NULL, 0) == NULL){
+		printf("mysql_real_connect failed: error %u ( %s )",
+			mysql_errno(pMysql), mysql_error(pMysql));
+		return -2;
+	}
+
+	//创建并返回有一个MYSQL_STMT处理程序
+	MYSQL_STMT* pMysqlStmt = mysql_stmt_init(pMysql);
+	if (pMysqlStmt == NULL){
+		std::cout << "mysql_stmt_init(), out of memory" << std::endl;
+		return -3;
+	}
+
+	// ? 标记仅在DML中是合法的，在DDL中是不合法的
+	std::string sqlStmt = "insert into mytb(`id`, `name`, `age`)values(?, ?, ?)";
+
+	//数据定义语言（DDL）：用于改变数据库结构，包括创建，更改和删除数据库对象
+	// 如：create table(创建表)	alter table(修改表)		truncate table(删除表中的数据)	drop table(删除表)
+	// truncate和delete区别：truncate快速删除记录并释放空间，不使用事务，无法撤销；
+	// delete可以在执行完后使用rollback，撤销删除，因此如果确定数据不用的话，使用truncate效率更高
+	//数据操纵语言（DML）：用于检索，插入和修改数据
+	// 如：select(查询)， insert(添加)， update(修改)， delete(删除)
+	if (mysql_stmt_prepare(pMysqlStmt, sqlStmt.data(), sqlStmt.size()) != 0){
+		std::cout << "mysql_stmt_prepare failed(" 
+			<< mysql_stmt_error(pMysqlStmt) << ")"<< std::endl;
+		return -4;
+	}
+
+	//求出标记参数的个数
+	if (mysql_stmt_param_count(pMysqlStmt) != 3){
+		std::cout << "invalid parameter count returned by MySQL" << std::endl;
+		return -5;
+	}
+
+	//绑定三个标记参数
+	MYSQL_BIND binds[3];
+	memset(binds, 0, sizeof(binds));
+
+	int id;
+	binds[0].buffer_type = MYSQL_TYPE_LONG;
+	binds[0].buffer = &id;
+	binds[0].is_null = 0;
+
+	std::string name;
+	binds[1].buffer_type = MYSQL_TYPE_STRING;
+	binds[1].buffer_length = 255;
+	binds[1].buffer = (char*)name.data();
+	binds[1].buffer_length = name.size();
+	binds[1].is_null = 0;
+
+	int age;
+	binds[2].buffer_type = MYSQL_TYPE_LONG;
+	binds[2].buffer = &age;
+	binds[2].is_null = 0;
+
+	if (!mysql_stmt_bind_param(pMysqlStmt, binds)){
+		std::cout << "mysql_stmt_bind_param failed("
+			<< mysql_stmt_error(pMysqlStmt) << ")" << std::endl;
+		return -6;
+	}
+
+	//插入记录
+	id = 10;
+	name = "kkk";
+	age = 39;
+	if (mysql_stmt_execute(pMysqlStmt) != 0){
+		std::cout << "mysql_stmt_execute failed("
+			<< mysql_stmt_error(pMysqlStmt) << ")" << std::endl;
+		return -7;
+	}
+
+	unsigned long long affectRows = mysql_stmt_affected_rows(pMysqlStmt);
+	if (affectRows < 1){
+		std::cout << "invalid affected rows" <<  std::endl;
+		return -8;
+	}
+
+	return affectRows;
+}

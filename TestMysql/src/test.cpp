@@ -169,7 +169,7 @@ struct simple_walker : pugi::xml_tree_walker
 	}
 };
 
-int main()
+int main1()
 {
 	MetaQuery *metaq = new MetaQuery();
 	
@@ -185,6 +185,16 @@ int main()
 	int ret = metaq->us_cms_http_get_search(path, headers, query_parameters, path_parameters, request_body, dest_endpoint, response_headers, response_body);
 
 	delete metaq;
+	while (1) {}
+	return 0;
+}
+
+
+int main()
+{
+	int ret = mysql_stmt();
+	
+
 	while (1) {}
 	return 0;
 }

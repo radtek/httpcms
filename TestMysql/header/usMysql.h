@@ -33,3 +33,7 @@ public:
 public:
 	MYSQL * m_mysql;
 };
+
+
+/*mysql预准备语句的使用*/
+int mysql_stmt();

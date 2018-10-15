@@ -24,6 +24,9 @@
     <ClInclude Include="header\http.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="header\shandong_metadata.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\filed.cpp">
@@ -36,6 +39,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\shandong_metadata.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -1,0 +1,31 @@
+﻿<Metadatafile>
+  <BasicDataContent>
+    <MetaDataFileName>AY300613720160624Y.XML</MetaDataFileName>
+	<typename>航片</typename>
+    <ProduceDate>201608</ProduceDate>
+    <GroundResolution>2.0</GroundResolution>
+    <DataFormat>Erdas Img</DataFormat>
+    <ImgRange>
+      <SouthWestAbs>899999.84</SouthWestAbs>
+      <SouthWestOrd>3790000.54</SouthWestOrd>
+      <NorthWestAbs>899999.84</NorthWestAbs>
+      <NorthWestOrd>3990000.14</NorthWestOrd>
+      <NorthEastAbs>1300153.44</NorthEastAbs>
+      <NorthEastOrd>3990000.14</NorthEastOrd>
+      <SouthEastAbs>1300153.44</SouthEastAbs>
+      <SouthEastOrd>3790000.54</SouthEastOrd>
+    </ImgRange>
+    <MathFoundation>
+      <LongerRadius>6378137.0000</LongerRadius>
+      <OblatusRatio>1/298.257222101</OblatusRatio>
+      <GeodeticDatum>2000国家大地坐标系</GeodeticDatum>
+      <MapProjection>高斯-克吕格投影</MapProjection>
+      <CentralMederian>111</CentralMederian>
+      <ZoneDivisionMode>6度带</ZoneDivisionMode>
+      <GaussKrugerZoneNo>19</GaussKrugerZoneNo>
+      <CoordinationUnit>米</CoordinationUnit>
+      <HeightSystem>正常高</HeightSystem>
+      <HeightDatum>1985国家高程基准</HeightDatum>
+    </MathFoundation>
+  </BasicDataContent>
+</Metadatafile>

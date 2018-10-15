@@ -1,13 +1,13 @@
+#if 0
+
 #include "field.h"
 #include "../parsexml/pugixml.hpp"
-#include <fstream>
-#include <iostream>
-#include <cassert>
-#include <vector>
-#include <algorithm>
+#include <geo_coord_transform/us_spatial_reference.hpp>
 #include <time.h>
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
+#include <algorithm>
+#include <vector>
 
 #define MAXMAPLEN 200
 
@@ -16,11 +16,12 @@ us_cms_metdata_map metadata_map[MAXMAPLEN];
 /*元数据映射表*/
 static us_cms_metdata_map metadata_map_array[] =
 {
-	"MaxX"                , 1, 3, 0x30,     //地理范围MaxX
-	"MinX"                , 2, 3, 0x30,		//地理范围MinX
-	"MaxY"                , 3, 3, 0x30,		//地理范围MaxY
-	"MinY"                , 4, 3, 0x30,		//地理范围MinY
-	"ImgRange"            , 5, 1, 0x02,     //地理范围((西南，东南，东北，西北))
+	"MaxX"                , 1, 3, 0x00,     //地理范围MaxX
+	"MinX"                , 2, 3, 0x00,		//地理范围MinX
+	"MaxY"                , 3, 3, 0x00,		//地理范围MaxY
+	"MinY"                , 4, 3, 0x00,		//地理范围MinY
+	"ImgRange"            , 5, 1, 0x00,     //地理范围((西南，东南，东北，西北))
+	"ImgCorner"			  , 75, 1, 0x00,    //地理角点
 	"MetaDataFileName"    , 6, 1, 0x03,     //元数据文件名称
 	"ProductName"         , 7, 1, 0x03,		// 产品名称
 	"Owner"               , 8, 1, 0x03,		// 产品版权单位名
@@ -98,7 +99,517 @@ const us_cms_metdata_map * us_get_cms_metadata_map_table(int * out_size)
 	return metadata_map_array;
 }
 
-int us_read_cms_metadata_record(const std::string & index, std::string * out_json)
+#ifdef _WIN32
+#include <Windows.h>
+inline std::wstring UTF8ToUTF16LE(const std::string& strUTF8)
+{
+	int dwUnicodeLen = MultiByteToWideChar(CP_UTF8, 0, strUTF8.c_str(), strUTF8.size(), NULL, 0);
+	std::wstring utf16le(dwUnicodeLen, 0);
+	MultiByteToWideChar(CP_UTF8, 0, strUTF8.c_str(), strUTF8.size(),
+		(wchar_t*)utf16le.data(), dwUnicodeLen);
+	return utf16le;
+}
+#endif // _WIN32
+
+#define _US_MAX(a,b) (((a) > (b)) ? (a) : (b))
+#define _US_MIN(a,b) (((a) < (b)) ? (a) : (b))
+
+inline time_t ngcc_timestr_to_utc(const char* tstr)
+{
+	std::string s(tstr);
+	time_t tm_t;
+	tm t_s;
+	t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+	t_s.tm_mon = atoi(s.substr(4, 2).c_str()) - 1;
+	t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+	t_s.tm_hour = 0;
+	t_s.tm_min = 0;
+	t_s.tm_sec = 0;
+	tm_t = mktime(&t_s);
+	return tm_t;
+}
+
+int us_read_cms_metadata_record(const std::string& index, std::string* out_json)
+{
+
+	static unispace::us_spatial_reference cgcs2000("+proj=longlat +ellps=GRS80 +no_defs");
+
+	if (index.size() < 6) { return -1; }
+	std::string xmlpath = index;
+	xmlpath.replace(index.size() - 5, 5, "Y.XML");
+	pugi::xml_document doc;
+	/*加载xml文件*/
+#ifdef _WIN32
+	pugi::xml_parse_result result = doc.load_file(UTF8ToUTF16LE(xmlpath).c_str(), 116U, pugi::encoding_utf8);
+#else
+	pugi::xml_parse_result result = doc.load_file(xmlpath.c_str(), 116U, pugi::encoding_utf8);
+
+#endif // _WIN32
+
+	if (!result) {
+		out_json->assign(result.description());
+		return -1;
+	}
+
+	rapidjson::StringBuffer strbuf;
+	strbuf.Reserve(1024);
+	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+
+	/*读取xml文件，写入json*/
+	writer.StartObject();
+
+	/*产品基本情况部分*/
+	int GaussKrugerZoneNo = -1;
+	float CentralMederian = 0;
+	/*椭球体的部分*/
+	pugi::xml_node nodeBasicDataContent = doc.child("Metadatafile").child("BasicDataContent");
+	if (nodeBasicDataContent.empty()) { return -10000; }
+	{
+		{
+			/*地面分辨率和图像大小按浮点数存放*/
+			pugi::xml_node node = nodeBasicDataContent.child("GroundResolution");
+			if (node.empty()) { return -13; }
+			writer.Key("13");
+			writer.Double(node.text().as_double());
+
+			node = nodeBasicDataContent.child("ImgSize");
+			if (node.empty()) { return -16; } //整景数据量大小
+			writer.Key("16");
+			writer.Double(node.text().as_double());
+
+			/*像素位数按整数存放*/
+			node = nodeBasicDataContent.child("PixelBits");
+			if (node.empty()) { return -15; }  //像素位数
+			{
+				writer.Key("15");
+				writer.Int(node.text().as_int());
+			}
+			/*日期转化为utc*/
+			node = nodeBasicDataContent.child("ProduceDate");
+			if (node.empty()) { return -11; } //产品生产时间
+			writer.Key("11");
+			writer.Int64(ngcc_timestr_to_utc(node.text().as_string()));
+
+			/*其他字段字符串存放*/
+			node = nodeBasicDataContent.child("MetaDataFileName");
+			if (node.empty()) { return -6; } //元数据文件名称
+			writer.Key("6");
+			writer.String(node.text().as_string());
+
+			node = nodeBasicDataContent.child("ProductName");
+			if (node.empty()) { return -7; } //产品名称
+			writer.Key("7");
+			writer.String(node.text().as_string());
+
+			node = nodeBasicDataContent.child("Owner");
+			if (node.empty()) { return -8; }  //产品版权单位名
+			writer.Key("8");
+			writer.String(node.text().as_string());
+
+			node = nodeBasicDataContent.child("Producer");
+			if (node.empty()) { return -9; }  //产品生产单位名
+			writer.Key("9");
+			writer.String(node.text().as_string());
+
+			node = nodeBasicDataContent.child("Publisher");
+			if (node.empty()) { return -10; }  //产品出版单位名
+			writer.Key("10");
+			writer.String(node.text().as_string());
+
+			node = nodeBasicDataContent.child("ConfidentialLevel");
+			if (node.empty()) { return -12; } //密级
+			writer.Key("12");
+			writer.String(node.text().as_string());
+
+			node = nodeBasicDataContent.child("ImgColorModel");
+			if (node.empty()) { return -14; } //影像色彩模式
+			writer.Key("14");
+			writer.String(node.text().as_string());
+
+			node = nodeBasicDataContent.child("DataFormat");
+			if (node.empty()) { return -17; } //数据格式
+			writer.Key("17");
+			writer.String(node.text().as_string());
+		}
+		/* MathFoundation */
+		pugi::xml_node nodeMathFoundation = nodeBasicDataContent.child("MathFoundation");
+		if (nodeMathFoundation.empty()) { return -10001; }
+		{
+			pugi::xml_node node = nodeMathFoundation.child("LongerRadius");
+			if (node.empty()) { return -18; }
+			writer.Key("18");
+			writer.String(node.text().as_string());
+			node = nodeMathFoundation.child("OblatusRatio");
+			if (node.empty()) { return -19; }
+			writer.Key("19");
+			writer.String(node.text().as_string());
+			node = nodeMathFoundation.child("GeodeticDatum");
+			if (node.empty()) { return -20; }
+			writer.Key("20");
+			writer.String(node.text().as_string());
+			node = nodeMathFoundation.child("MapProjection");
+			if (node.empty()) { return -21; }
+			writer.Key("21");
+			writer.String(node.text().as_string());
+
+			/*中央子午线和带号*/
+			node = nodeMathFoundation.child("CentralMederian");
+			if (node.empty()) { return -22; }
+			CentralMederian = node.text().as_float();
+			writer.Key("22");
+			writer.Int(node.text().as_int());
+
+			node = nodeMathFoundation.child("ZoneDivisionMode");
+			if (node.empty()) { return -23; }
+			writer.Key("23");
+			writer.String(node.text().as_string());
+
+			node = nodeMathFoundation.child("GaussKrugerZoneNo");
+			if (node.empty()) { return -24; }
+			GaussKrugerZoneNo = node.text().as_int();
+			if (GaussKrugerZoneNo < 0 || GaussKrugerZoneNo > 120) { return -7; }
+			writer.Key("24");
+			writer.Int(GaussKrugerZoneNo);
+
+			node = nodeMathFoundation.child("CoordinationUnit");
+			if (node.empty()) { return -25; }
+			writer.Key("25");
+			writer.String(node.text().as_string());
+
+			node = nodeMathFoundation.child("HeightSystem");
+			if (node.empty()) { return -26; }
+			writer.Key("26");
+			writer.String(node.text().as_string());
+			node = nodeMathFoundation.child("HeightDatum");
+			if (node.empty()) { return -27; }
+			writer.Key("27");
+			writer.String(node.text().as_string());
+
+		}
+		/* 地理范围，找出横坐标和纵坐标的最大最小值按浮点数类型存放 */
+		pugi::xml_node nodeImgRange = nodeBasicDataContent.child("ImgRange");
+		if (nodeImgRange.empty()) { return -10002; }
+		{
+			pugi::xml_node cornernode;
+			double cornerXY[8];
+			/* 西南 东南 东北 西北 */
+			cornernode = nodeImgRange.child("SouthWestAbs");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[0] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("SouthEastAbs");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[1] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthEastAbs");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[2] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthWestAbs");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[3] = cornernode.text().as_double();
+
+			cornernode = nodeImgRange.child("SouthWestOrd");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[4] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("SouthEastOrd");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[5] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthEastOrd");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[6] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthWestOrd");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[7] = cornernode.text().as_double();
+
+			/* 原始投影坐标有效范围角点 */
+			char buffer[1024];
+			int len = sprintf(buffer, "[%g %g,%g %g,%g %e,%g %g]", cornerXY[0], cornerXY[4],
+				cornerXY[1], cornerXY[5], cornerXY[2], cornerXY[6], cornerXY[3], cornerXY[7]);
+			writer.Key("75");
+			writer.String(buffer, len);
+			// 坐标转换--投影转经纬度
+			int32_t false_easting = 500000;
+			if (cornerXY[0] > 10000000.0) {
+				false_easting += GaussKrugerZoneNo * 1000000;
+			}
+			sprintf(buffer, "+proj=tmerc +lat_0=0 +lon_0=%f +k=1 +x_0=%d +y_0=0 +ellps=GRS80 +units=m +no_defs",
+				CentralMederian, false_easting);
+			unispace::us_spatial_reference GKProj(buffer);
+
+			int result = unispace::us_spatial_reference::transform(GKProj, cgcs2000, 4, 1,
+				&cornerXY[0], &cornerXY[4], NULL);
+
+			writer.Key("1");
+			writer.Double(_US_MAX(_US_MAX(cornerXY[0], cornerXY[1]), _US_MAX(cornerXY[2], cornerXY[3])));
+
+			writer.Key("2");
+			writer.Double(_US_MIN(_US_MIN(cornerXY[0], cornerXY[1]), _US_MIN(cornerXY[2], cornerXY[3])));
+
+			writer.Key("3");
+			writer.Double(_US_MAX(_US_MAX(cornerXY[4], cornerXY[5]), _US_MAX(cornerXY[6], cornerXY[7])));
+
+			writer.Key("4");
+			writer.Double(_US_MIN(_US_MIN(cornerXY[4], cornerXY[5]), _US_MIN(cornerXY[6], cornerXY[7])));
+
+			/*地理坐标范围以((x0 y0,x1 y1,x2 y2,x3 y3,x0 y0))形式存入json*/
+			len = sprintf(buffer, "((%e %e,%e %e,%e %e,%e %e,%e %e))",
+				cornerXY[0], cornerXY[4], cornerXY[1], cornerXY[5], cornerXY[2], cornerXY[6],
+				cornerXY[3], cornerXY[7], cornerXY[0], cornerXY[4]);
+			writer.Key("5");
+			writer.String(buffer, len);
+		}
+	}
+
+	/*数据源情况部分*/
+	pugi::xml_node nodeImgSource = doc.child("Metadatafile").child("ImgSource");
+	if (nodeImgSource.empty()) { return -10003; }
+	{
+		// 卫星名称
+		pugi::xml_node node = nodeImgSource.child("SateName");
+		if (node.empty()) { return -28; }
+		writer.Key("28");
+		writer.String(node.text().as_string());
+		// 卫星影像数据质量评价
+		node = nodeImgSource.child("SateImgQuality");
+		if (node.empty()) { return -39; }
+		writer.Key("39");
+		writer.String(node.text().as_string());
+
+		pugi::xml_node nodePanBand = nodeImgSource.child("PanBand");
+		//全色影像传感器类型
+		node = nodePanBand.child("PBandSensorType");
+		if (node.empty()) { return -29; }
+		writer.Key("29");
+		writer.String(node.text().as_string());
+		//全色卫星影像分辨率
+		node = nodePanBand.child("SateResolution");
+		if (node.empty()) { return -30; }
+		writer.Key("30");
+		writer.Double(node.text().as_double());
+		// 全色卫星影像轨道号
+		node = nodePanBand.child("PBandOrbitCode");
+		if (node.empty()) { return -31; }
+		writer.Key("31");
+		writer.String(node.text().as_string());
+		//全色卫星影像获取时间
+		node = nodePanBand.child("PBandDate");
+		if (node.empty()) { return -32; }
+		writer.Key("32");
+		writer.Int64(ngcc_timestr_to_utc(node.text().as_string()));
+
+		pugi::xml_node nodeMultiBand = nodeImgSource.child("MultiBand");
+		// 多光谱影像传感器类型
+		node = nodeMultiBand.child("MultiBandSensorType");
+		if (node.empty()) { return -33; }
+		writer.Key("33");
+		writer.String(node.text().as_string());
+		// 多光谱波段数量
+		node = nodeMultiBand.child("MultiBandNum");
+		if (node.empty()) { return -34; }
+		writer.Key("34");
+		writer.Int(node.text().as_int());
+		// 多光谱波段名称
+		node = nodeMultiBand.child("MultiBandName");
+		if (node.empty()) { return -35; }
+		writer.Key("35");
+		writer.String(node.text().as_string());
+		//多光谱卫星影像分辨率
+		node = nodeMultiBand.child("MultiBandResolution");
+		if (node.empty()) { return -36; }
+		writer.Key("36");
+		writer.Double(node.text().as_double());
+		// 多光谱卫星影像轨道号
+		node = nodeMultiBand.child("MultiBandOrbitCode");
+		if (node.empty()) { return -37; }
+		writer.Key("37");
+		writer.String(node.text().as_string());
+		//多光谱卫星影像获取时间
+		node = nodeMultiBand.child("MultiBandDate");
+		if (node.empty()) { return -38; }
+		writer.Key("38");
+		writer.Int64(ngcc_timestr_to_utc(node.text().as_string()));
+
+	}
+
+
+	/*数据生产过程信息部分*/
+	pugi::xml_node nodeProduceInfomation = doc.child("Metadatafile").child("ProduceInfomation");
+	{
+		// DEM格网间距
+		pugi::xml_node node = nodeProduceInfomation.child("GridInterval");
+		if (node.empty()) { return -40; }
+		writer.Key("40");
+		writer.Int64(node.text().as_llong());
+		// DEM精度情况
+		node = nodeProduceInfomation.child("DEMPrecision");
+		if (node.empty()) { return -41; }
+		writer.Key("41");
+		writer.String(node.text().as_string());
+		// 控制资料来源
+		node = nodeProduceInfomation.child("ControlSource");
+		if (node.empty()) { return -42; }
+		writer.Key("42");
+		writer.String(node.text().as_string());
+		// 数据生产方式
+		node = nodeProduceInfomation.child("ManufactureType");
+		if (node.empty()) { return -48; }
+		writer.Key("48");
+		writer.String(node.text().as_string());
+		// 立体模型编辑情况
+		node = nodeProduceInfomation.child("SteroEditQuality");
+		if (node.empty()) { return -49; }
+		writer.Key("49");
+		writer.String(node.text().as_string());
+		// 正射纠正软件
+		node = nodeProduceInfomation.child("OrthoRectifySoftware");
+		if (node.empty()) { return -50; }
+		writer.Key("50");
+		writer.String(node.text().as_string());
+		// 重采样方法
+		node = nodeProduceInfomation.child("ResampleMethod");
+		if (node.empty()) { return -51; }
+		writer.Key("51");
+		writer.String(node.text().as_string());
+		// 正射纠正总结
+		node = nodeProduceInfomation.child("OrthoRectifyQuality");
+		if (node.empty()) { return -52; }
+		writer.Key("52");
+		writer.String(node.text().as_string());
+		// 正射纠正作业员
+		node = nodeProduceInfomation.child("OrthoRectifyName");
+		if (node.empty()) { return -53; }
+		writer.Key("53");
+		writer.String(node.text().as_string());
+		// 正射纠正检查员
+		node = nodeProduceInfomation.child("OrthoCheckName");
+		if (node.empty()) { return -54; }
+		writer.Key("54");
+		writer.String(node.text().as_string());
+
+		pugi::xml_node nodeImgOrientation = nodeProduceInfomation.child("ImgOrientation");
+		// 外参数解算平面中误差
+		node = nodeImgOrientation.child("SateOriXRMS");
+		writer.Key("43");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		node = nodeImgOrientation.child("SateOriYRMS");
+		writer.Key("44");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		node = nodeImgOrientation.child("SateOriZRMS");
+		writer.Key("45");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		// 参数解算作业员
+		node = nodeImgOrientation.child("ATProducerName");
+		if (node.empty()) { return -46; }
+		writer.Key("46");
+		writer.String(node.text().as_string());
+		// 参数解算检查员
+		node = nodeImgOrientation.child("ATCheckerName");
+		if (node.empty()) { return -47; }
+		writer.Key("47");
+		writer.String(node.text().as_string());
+
+		pugi::xml_node nodeMosaicInfo = nodeProduceInfomation.child("MosaicInfo");
+		// 最大接边误差
+		node = nodeMosaicInfo.child("WestMosaicMaxError");
+		writer.Key("55");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		node = nodeMosaicInfo.child("NorthMosaicMaxError");
+		writer.Key("56");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		node = nodeMosaicInfo.child("EastMosaicMaxError");
+		writer.Key("57");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		node = nodeMosaicInfo.child("SouthMosaicMaxError");
+		writer.Key("58");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		// 接边质量评价
+		node = nodeMosaicInfo.child("MosaicQuality");
+		if (node.empty()) { return -59; }
+		writer.Key("59");
+		writer.String(node.text().as_string());
+		// 接边作业员
+		node = nodeMosaicInfo.child("MosaicProducerName");
+		if (node.empty()) { return -60; }
+		writer.Key("60");
+		writer.String(node.text().as_string());
+		// 接边检查员
+		node = nodeMosaicInfo.child("MosaicCheckerName");
+		if (node.empty()) { return -61; }
+		writer.Key("61");
+		writer.String(node.text().as_string());
+		// 多光谱配准纠正中误差
+		node = nodeMosaicInfo.child("MultiBRectifyXRMS");
+		writer.Key("62");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		node = nodeMosaicInfo.child("MultiBRectifyYRMS");
+		writer.Key("63");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+
+		pugi::xml_node nodeQualityCheckInfo = nodeProduceInfomation.child("QualityCheckInfo");
+		// 检查点个数
+		node = nodeQualityCheckInfo.child("CheckPointNum");
+		writer.Key("64");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		// 检查点平面中误差
+		node = nodeQualityCheckInfo.child("CheckRMS");
+		writer.Key("65");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		// 检查点最大误差
+		node = nodeQualityCheckInfo.child("CheckMAXErr");
+		writer.Key("66");
+		writer.Double((node.empty() || node.text().empty()) ? 0.0 : node.text().as_double());
+		// 院级检查结论
+		node = nodeQualityCheckInfo.child("ConclusionInstitute");
+		if (node.empty()) { return -67; }
+		writer.Key("67");
+		writer.String(node.text().as_string());
+		// 院级检查单位
+		node = nodeQualityCheckInfo.child("InstituteCheckUnit");
+		if (node.empty()) { return -68; }
+		writer.Key("68");
+		writer.String(node.text().as_string());
+		// 院级检查人
+		node = nodeQualityCheckInfo.child("InstituteCheckName");
+		if (node.empty()) { return -69; }
+		writer.Key("69");
+		writer.String(node.text().as_string());
+		// 院级检查时间
+		node = nodeQualityCheckInfo.child("InstituteCheckDate");
+		if (node.empty()) { return -70; }
+		writer.Key("70");
+		writer.Int64(ngcc_timestr_to_utc(node.text().as_string()));
+
+		// 局级验收人
+		node = nodeQualityCheckInfo.child("BureauCheckName");
+		if (node.empty()) { return -71; }
+		writer.Key("71");
+		writer.String(node.text().as_string());
+		// 局级验收单位
+		node = nodeQualityCheckInfo.child("BureauCheckUnit");
+		if (node.empty()) { return -72; }
+		writer.Key("72");
+		writer.String(node.text().as_string());
+		// 局级验收意见
+		node = nodeQualityCheckInfo.child("ConclusionBureau");
+		if (node.empty()) { return -73; }
+		writer.Key("73");
+		writer.String(node.text().as_string());
+		// 局级验收时间
+		node = nodeQualityCheckInfo.child("BureauCheckDate");
+		if (node.empty()) { return -74; }
+		writer.Key("74");
+		writer.Int64(ngcc_timestr_to_utc(node.text().as_string()));
+
+	}
+
+	writer.EndObject();
+
+	out_json->assign(strbuf.GetString(), strbuf.GetSize());
+
+	return 0;
+}
+
+
+#if 0
+int us_read_cms_metadata_record0(const std::string & index, std::string * out_json)
 {
 	if (index.size() < 6) { return -1; }
 	std::string xmlpath = index;
@@ -230,6 +741,9 @@ int us_read_cms_metadata_record(const std::string & index, std::string * out_jso
 			writer.Double(y_min);
 
 			writer.Key("5");
+			writer.String(s_imgrange.c_str());
+
+			writer.Key("75");
 			writer.String(s_imgrange.c_str());
 		}
 
@@ -727,11 +1241,6 @@ int us_read_cms_metadata_record(const std::string & index, std::string * out_jso
 
 	return 0;
 }
-
-
-
-
-
 
 /*之前写的*/
 const us_cms_metdata_map * us_get_cms_metadata_map_table1(int * out_size)
@@ -1401,4 +1910,1429 @@ int us_read_cms_metadata_record2(const std::string & index, std::string * out_js
 
 	return 0;
 }
+#endif
 
+#if 0
+#ifdef _WIN32
+#include <Windows.h>
+inline std::string UTF8toANSI(const std::string &strUTF8)
+{
+	//获取转换为多字节后需要的缓冲区大小，创建多字节缓冲区
+	UINT nLen = MultiByteToWideChar(CP_UTF8, NULL, strUTF8.data(), -1, NULL, NULL);
+	std::vector<WCHAR> wszBuffer(nLen + 1);
+	nLen = MultiByteToWideChar(CP_UTF8, NULL, strUTF8.data(), -1, wszBuffer.data(), nLen);
+	wszBuffer[nLen] = 0;
+
+	nLen = WideCharToMultiByte(CP_ACP, NULL, wszBuffer.data(), -1, NULL, NULL, NULL, NULL);
+	std::vector<CHAR> szBuffer(nLen + 1);
+	nLen = WideCharToMultiByte(CP_ACP, NULL, wszBuffer.data(), -1,
+		szBuffer.data(), nLen, NULL, NULL);
+	szBuffer[nLen] = 0;
+	std::string strANSI(szBuffer.data(), nLen);
+	//清理内存
+	return strANSI;
+}
+#else
+#define UTF8toANSI(strUTF8) strUTF8
+#endif // _WIN32
+#endif
+
+#if 0
+int us_read_cms_metadata_record(const std::string& index, std::string* out_json)
+{
+	static unispace::us_spatial_reference cgcs2000("proj=longlat +ellps=GRS80 +no_defs");
+
+	if (index.size() < 6) { return -1; }
+	std::string xmlpath = index;
+	xmlpath.replace(index.size() - 5, 5, "Y.XML");
+	puts(xmlpath.c_str());
+
+	pugi::xml_document doc;
+	/*加载xml文件*/
+	pugi::xml_parse_result result = doc.load_file(UTF8toANSI(xmlpath).c_str(), 116U, pugi::encoding_utf8);
+	if (!result)
+	{
+		out_json->assign(result.description());
+		return -1;
+	}
+
+	rapidjson::StringBuffer strbuf;
+	strbuf.Reserve(1024);
+	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+
+	/*读取xml文件，写入json*/
+	writer.StartObject();
+
+	/*产品基本情况部分*/
+	int GaussKrugerZoneNo = -1;
+	pugi::xml_node nodeBasicDataContent = doc.child("Metadatafile").child("BasicDataContent");
+	if (nodeBasicDataContent.empty()) { return -10000; }
+	{
+		{
+			//地面分辨率
+			pugi::xml_node node = nodeBasicDataContent.child("GroundResolution");
+			if (node.empty()) { return -13; }
+			writer.Key("13");
+			writer.Double(node.text().as_double());
+
+			//整景数据量大小
+			node = nodeBasicDataContent.child("ImgSize");
+			if (node.empty()) { return -16; }
+			writer.Key("16");
+			writer.Double(node.text().as_double());
+
+			//像素位数
+			node = nodeBasicDataContent.child("PixelBits");
+			if (node.empty()) { return -15; }
+			{
+				writer.Key("15");
+				writer.Int(node.text().as_int());
+			}
+
+			//产品生产时间
+			node = nodeBasicDataContent.child("ProduceDate");
+			if (node.empty()) { return -11; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("11");
+				writer.Int64(tm_t);
+			}
+
+			//元数据文件名称
+			node = nodeBasicDataContent.child("MetaDataFileName");
+			if (node.empty()) { return -6; }
+			writer.Key("6");
+			writer.String(node.text().as_string());
+
+			//产品名称
+			node = nodeBasicDataContent.child("ProductName");
+			if (node.empty()) { return -7; }
+			writer.Key("7");
+			writer.String(node.text().as_string());
+
+			//产品版权单位名
+			node = nodeBasicDataContent.child("Owner");
+			if (node.empty()) { return -8; }
+			writer.Key("8");
+			writer.String(node.text().as_string());
+
+			//产品生产单位名
+			node = nodeBasicDataContent.child("Producer");
+			if (node.empty()) { return -9; }
+			writer.Key("9");
+			writer.String(node.text().as_string());
+
+			//产品出版单位名
+			node = nodeBasicDataContent.child("Publisher");
+			if (node.empty()) { return -10; }
+			writer.Key("10");
+			writer.String(node.text().as_string());
+
+			//密级
+			node = nodeBasicDataContent.child("ConfidentialLevel");
+			if (node.empty()) { return -12; }
+			writer.Key("12");
+			writer.String(node.text().as_string());
+
+			//影像色彩模式
+			node = nodeBasicDataContent.child("ImgColorModel");
+			if (node.empty()) { return -14; }
+			writer.Key("14");
+			writer.String(node.text().as_string());
+
+			//数据格式
+			node = nodeBasicDataContent.child("DataFormat");
+			if (node.empty()) { return -17; }
+			writer.Key("17");
+			writer.String(node.text().as_string());
+		}
+
+		/*椭球体的部分*/
+		pugi::xml_node nodeMathFoundation = doc.child("MathFoundation");
+		if (nodeMathFoundation.empty()) { return -10001; }
+		{
+			//椭球长半径
+			pugi::xml_node node = nodeMathFoundation.child("LongerRadius");
+			if (node.empty()) { return -18; }
+			writer.Key("18");
+			writer.String(node.text().as_string());
+
+			//椭球扁率
+			node = nodeMathFoundation.child("OblatusRatio");
+			if (node.empty()) { return -19; }
+			writer.Key("19");
+			writer.String(node.text().as_string());
+
+			//所采用大地基准
+			node = nodeMathFoundation.child("GeodeticDatum");
+			if (node.empty()) { return -20; }
+			writer.Key("20");
+			writer.String(node.text().as_string());
+
+			//地图投影
+			node = nodeMathFoundation.child("MapProjection");
+			if (node.empty()) { return -21; }
+			writer.Key("21");
+			writer.String(node.text().as_string());
+
+			//中央子午线
+			node = nodeMathFoundation.child("CentralMederian");
+			if (node.empty()) { return -22; }
+			writer.Key("22");
+			writer.Int(node.text().as_int());
+
+			//分带方式
+			node = nodeMathFoundation.child("ZoneDivisionMode");
+			if (node.empty()) { return -23; }
+			writer.Key("23");
+			writer.String(node.text().as_string());
+
+			//高斯 - 克吕格投影带号
+			node = nodeMathFoundation.child("GaussKrugerZoneNo");
+			if (node.empty()) { return -24; }
+			GaussKrugerZoneNo = node.text().as_int();
+			if (GaussKrugerZoneNo < 0 || GaussKrugerZoneNo > 120) { return -7; }
+			writer.Key("24");
+			writer.Int(GaussKrugerZoneNo);
+
+			//坐标单位
+			node = nodeMathFoundation.child("CoordinationUnit");
+			if (node.empty()) { return -25; }
+			writer.Key("25");
+			writer.String(node.text().as_string());
+
+			//高程系统名
+			node = nodeMathFoundation.child("HeightSystem");
+			if (node.empty()) { return -26; }
+			writer.Key("26");
+			writer.String(node.text().as_string());
+
+			//高程基准
+			node = nodeMathFoundation.child("HeightDatum");
+			if (node.empty()) { return -27; }
+			writer.Key("27");
+			writer.String(node.text().as_string());
+
+		}
+
+		/* 地理范围，找出横坐标和纵坐标的最大最小值按浮点数类型存放 */
+		pugi::xml_node nodeImgRange = doc.child("ImgRange");
+		if (nodeImgRange.empty()) { return -10002; }
+		{
+			pugi::xml_node cornernode;
+			double cornerXY[8];
+			/* 西南 东南 东北 西北 */
+			cornernode = nodeImgRange.child("SouthWestAbs");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[0] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("SouthEastAbs");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[1] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthEastAbs");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[2] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthWestAbs");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[3] = cornernode.text().as_double();
+
+			cornernode = nodeImgRange.child("SouthWestOrd");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[4] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("SouthEastOrd");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[5] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthEastOrd");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[6] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthWestOrd");
+			if (cornernode.empty()) { return -5; }
+			cornerXY[7] = cornernode.text().as_double();
+
+			/* 原始投影坐标有效范围角点 */
+			char buffer[1024];
+			int len = sprintf(buffer, "[%g %g,%g %g,%g %e,%g %g]", cornerXY[0], cornerXY[4],
+				cornerXY[1], cornerXY[5], cornerXY[2], cornerXY[6], cornerXY[3], cornerXY[7]);
+			writer.Key("75");
+			writer.String(buffer, len);
+			// 坐标转换--投影转经纬度
+			int32_t false_easting = 500000;
+			if (cornerXY[0] > 10000000.0) {
+				false_easting += GaussKrugerZoneNo * 1000000;
+			}
+			sprintf(buffer, "proj=tmerc +lat_0=0 +lon_0=120 +k=1 +x_0=%d +y_0=0 +ellps=GRS80 +units=m +no_defs", false_easting);
+			unispace::us_spatial_reference GKProj(buffer);
+
+			unispace::us_spatial_reference::transform(GKProj, cgcs2000, 4, 1,
+				&cornerXY[0], &cornerXY[4], NULL);
+
+			writer.Key("1");
+			writer.Double(_US_MAX(_US_MAX(cornerXY[0], cornerXY[1]), _US_MAX(cornerXY[2], cornerXY[3])));
+
+			writer.Key("2");
+			writer.Double(_US_MIN(_US_MIN(cornerXY[0], cornerXY[1]), _US_MIN(cornerXY[2], cornerXY[3])));
+
+			writer.Key("3");
+			writer.Double(_US_MAX(_US_MAX(cornerXY[4], cornerXY[5]), _US_MAX(cornerXY[6], cornerXY[7])));
+
+			writer.Key("4");
+			writer.Double(_US_MIN(_US_MIN(cornerXY[4], cornerXY[5]), _US_MIN(cornerXY[6], cornerXY[7])));
+
+			/*地理坐标范围以((x0 y0,x1 y1,x2 y2,x3 y3,x0 y0))形式存入json*/
+			len = sprintf(buffer, "((%e %e,%e %e,%e %e,%e %e,%e %e))",
+				cornerXY[0], cornerXY[4], cornerXY[1], cornerXY[5], cornerXY[2], cornerXY[6],
+				cornerXY[3], cornerXY[7], cornerXY[0], cornerXY[4]);
+			writer.Key("5");
+			writer.String(buffer, len);
+		}
+	}
+
+
+	/*数据源情况部分*/
+	pugi::xml_node nodeImgSource = doc.child("Metadatafile").child("ImgSource");
+	if (nodeImgSource.empty()) { return -10003; }
+	{
+		{
+			//卫星名称
+			pugi::xml_node node = nodeImgSource.child("SateName");
+			if (node.empty()) { return -28; }
+			writer.Key("28");
+			writer.String(node.text().as_string());
+		}
+
+		pugi::xml_node nodePanBand = nodeImgSource.child("PanBand");
+		if (nodePanBand.empty()) { return -10004; }
+		{
+			//全色影像传感器类型
+			pugi::xml_node node = nodePanBand.child("PBandSensorType");
+			if (node.empty()) { return -29; }
+			writer.Key("29");
+			writer.String(node.text().as_string());
+
+			//全色卫星影像分辨率
+			node = nodePanBand.child("SateResolution");
+			if (node.empty()) { return -30; }
+			writer.Key("30");
+			writer.Double(node.text().as_double());
+
+			//全色卫星影像轨道号
+			node = nodePanBand.child("PbandOrbitCode");
+			if (node.empty()) { return -31; }
+			writer.Key("31");
+			writer.String(node.text().as_string());
+
+			//全色卫星影像获取时间
+			node = nodePanBand.child("PbandDate");
+			if (node.empty()) { return -32; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("32");
+				writer.Int64(tm_t);
+			}
+		}
+
+		pugi::xml_node nodeMultiBand = nodeImgSource.child("MultiBand");
+		if (nodeMultiBand.empty()) { return -10005; }
+		{
+			//多光谱影像传感器类型
+			pugi::xml_node node = nodeMultiBand.child("MultiBandSensorType");
+			if (nodePanBand.empty()) { return -33; }
+			writer.Key("33");
+			writer.String(node.text().as_string());
+
+			//多光谱波段数量
+			node = nodeMultiBand.child("MultiBandNum");
+			if (nodePanBand.empty()) { return -34; }
+			writer.Key("34");
+			writer.Int(node.text().as_int());
+
+			//多光谱波段名称
+			node = nodeMultiBand.child("MultiBandName");
+			if (nodePanBand.empty()) { return -35; }
+			writer.Key("35");
+			writer.String(node.text().as_string());
+
+			//多光谱卫星影像分辨率
+			node = nodeMultiBand.child("MultiBandResolution");
+			if (nodePanBand.empty()) { return -36; }
+			writer.Key("36");
+			writer.Double(node.text().as_double());
+
+			//多光谱卫星影像轨道号
+			node = nodeMultiBand.child("MultiBandOrbitCode");
+			if (nodePanBand.empty()) { return -37; }
+			writer.Key("37");
+			writer.String(node.text().as_string());
+
+			//多光谱卫星影像获取时间
+			node = nodeMultiBand.child("MultiBandDate");
+			if (nodePanBand.empty()) { return -38; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("38");
+				writer.Int64(tm_t);
+			}
+		}
+
+		{
+			//卫星影像数据质量评价
+			pugi::xml_node nodeMultiBand = nodeImgSource.child("SateImgQuality");
+			if (nodeMultiBand.empty()) { return -39; }
+			writer.Key("39");
+			writer.String(nodeMultiBand.text().as_string());
+		}
+	}
+
+	/*数据生产过程信息部分*/
+	pugi::xml_node nodeProduceInfomation = doc.child("Metadatafile").child("ProduceInfomation");
+	if (nodeProduceInfomation.empty()) { return -10006; }
+	{
+		{
+			//DEM格网间距
+			pugi::xml_node node = nodeProduceInfomation.child("GridInterval");
+			if (node.empty()) { return -40; }
+			writer.Key("40");
+			writer.Int64(node.text().as_llong());
+
+			//DEM精度情况
+			node = nodeProduceInfomation.child("DEMPrecision");
+			if (node.empty()) { return -41; }
+			writer.Key("41");
+			writer.String(node.text().as_string());
+
+			//控制资料来源
+			node = nodeProduceInfomation.child("ControlSource");
+			if (node.empty()) { return -42; }
+			writer.Key("42");
+			writer.String(node.text().as_string());
+		}
+
+		pugi::xml_node nodeImgOrientation = nodeProduceInfomation.child("ImgOrientation");
+		if (nodeImgOrientation.empty()) { return -10007; }
+		{
+			//外参数解算平面中误差(X)
+			pugi::xml_node node = nodeImgOrientation.child("SateOriXRMS");
+			if (node.empty()) { return -43; }
+			writer.Key("43");
+			writer.Double(node.text().as_double());
+
+			//外参数解算平面中误差(Y)
+			node = nodeImgOrientation.child("SateOriYRMS");
+			if (node.empty()) { return -44; }
+			writer.Key("44");
+			writer.Double(node.text().as_double());
+
+			//外参数解算高程中误差(Z)
+			node = nodeImgOrientation.child("SateOriZRMS");
+			if (node.empty()) { return -45; }
+			writer.Key("45");
+			writer.Double(node.text().as_double());
+
+			//参数解算作业员
+			node = nodeImgOrientation.child("ATProducerName");
+			if (node.empty()) { return -46; }
+			writer.Key("46");
+			writer.String(node.text().as_string());
+
+			//参数解算检查员
+			node = nodeImgOrientation.child("ATCheckerName");
+			if (node.empty()) { return -47; }
+			writer.Key("47");
+			writer.String(node.text().as_string());
+		}
+
+		{
+			//数据生产方式
+			pugi::xml_node node = nodeProduceInfomation.child("ManufactureType");
+			if (node.empty()) { return -48; }
+			writer.Key("48");
+			writer.String(node.text().as_string());
+
+			//立体模型编辑情况
+			node = nodeProduceInfomation.child("SteroEditQuality");
+			if (node.empty()) { return -49; }
+			writer.Key("49");
+			writer.String(node.text().as_string());
+
+			//正射纠正软件
+			node = nodeProduceInfomation.child("OrthoRectifySoftware");
+			if (node.empty()) { return -50; }
+			writer.Key("50");
+			writer.String(node.text().as_string());
+
+			//重采样方法
+			node = nodeProduceInfomation.child("ResampleMethod");
+			if (node.empty()) { return -51; }
+			writer.Key("51");
+			writer.String(node.text().as_string());
+
+			//正射纠正总结
+			node = nodeProduceInfomation.child("OrthoRectifyQuality");
+			if (node.empty()) { return -52; }
+			writer.Key("52");
+			writer.String(node.text().as_string());
+
+			//正射纠正作业员
+			node = nodeProduceInfomation.child("OrthoRectifyName");
+			if (node.empty()) { return -53; }
+			writer.Key("53");
+			writer.String(node.text().as_string());
+
+			//正射纠正检查员
+			node = nodeProduceInfomation.child("OrthoCheckName");
+			if (node.empty()) { return -54; }
+			writer.Key("54");
+			writer.String(node.text().as_string());
+		}
+
+		pugi::xml_node nodeMosaicInfo = nodeProduceInfomation.child("MosaicInfo");
+		if (nodeMosaicInfo.empty()) { return -10008; }
+		{
+			//西边最大接边差
+			pugi::xml_node node = nodeMosaicInfo.child("WestMosaicMaxError");
+			if (node.empty()) { return -55; }
+			writer.Key("55");
+			writer.Double(node.text().as_double());
+
+			//北边最大接边差
+			node = nodeMosaicInfo.child("NorthMosaicMaxError");
+			if (node.empty()) { return -56; }
+			writer.Key("56");
+			writer.Double(node.text().as_double());
+
+			//东边最大接边差
+			node = nodeMosaicInfo.child("EastMosaicMaxError");
+			if (node.empty()) { return -57; }
+			writer.Key("57");
+			writer.Double(node.text().as_double());
+
+			//南边最大接边差
+			node = nodeMosaicInfo.child("SouthMosaicMaxError");
+			if (node.empty()) { return -58; }
+			writer.Key("58");
+			writer.Double(node.text().as_double());
+
+			//接边质量评价
+			node = nodeMosaicInfo.child("MosaicQuality");
+			if (node.empty()) { return -59; }
+			writer.Key("59");
+			writer.String(node.text().as_string());
+
+			//接边作业员
+			node = nodeMosaicInfo.child("MosaicProducerName");
+			if (node.empty()) { return -60; }
+			writer.Key("60");
+			writer.String(node.text().as_string());
+
+			//接边检查员
+			node = nodeMosaicInfo.child("MosaicCheckerName");
+			if (node.empty()) { return -61; }
+			writer.Key("61");
+			writer.String(node.text().as_string());
+
+			//多光谱配准纠正中误差(X)
+			node = nodeMosaicInfo.child("MultiBRectifyXRMS");
+			if (node.empty()) { return -62; }
+			writer.Key("62");
+			writer.Double(node.text().as_double());
+
+			//多光谱配准纠正中误差(Y)
+			node = nodeMosaicInfo.child("MultiBRectifyYRMS");
+			if (node.empty()) { return -63; }
+			writer.Key("63");
+			writer.Double(node.text().as_double());
+		}
+
+		pugi::xml_node nodeQualityCheckInfo = nodeProduceInfomation.child("QualityCheckInfo");
+		if (nodeQualityCheckInfo.empty()) { return -10009; }
+		{
+			//检查点个数
+			pugi::xml_node node = nodeQualityCheckInfo.child("CheckPointNum");
+			if (node.empty()) { return -64; }
+			writer.Key("64");
+			writer.Int(node.text().as_int());
+
+			//检查点平面中误差
+			node = nodeQualityCheckInfo.child("CheckRMS");
+			if (node.empty()) { return -65; }
+			writer.Key("65");
+			writer.Double(node.text().as_double());
+
+			//检查点最大误差
+			node = nodeQualityCheckInfo.child("CheckMAXErr");
+			if (node.empty()) { return -66; }
+			writer.Key("66");
+			writer.Double(node.text().as_double());
+
+			//院级检查结论
+			node = nodeQualityCheckInfo.child("ConclusionInstitute");
+			if (node.empty()) { return -67; }
+			writer.Key("67");
+			writer.String(node.text().as_string());
+
+			//院级检查单位
+			node = nodeQualityCheckInfo.child("InstituteCheckUnit");
+			if (node.empty()) { return -68; }
+			writer.Key("68");
+			writer.String(node.text().as_string());
+
+			//院级检查人
+			node = nodeQualityCheckInfo.child("InstituteCheckName");
+			if (node.empty()) { return -69; }
+			writer.Key("69");
+			writer.String(node.text().as_string());
+
+			//院级检查时间
+			node = nodeQualityCheckInfo.child("InstituteCheckDate");
+			if (node.empty()) { return -70; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("70");
+				writer.Int64(tm_t);
+			}
+
+			//局级验收人
+			node = nodeQualityCheckInfo.child("BureauCheckName");
+			if (node.empty()) { return -71; }
+			writer.Key("71");
+			writer.String(node.text().as_string());
+
+			//局级验收单位
+			node = nodeQualityCheckInfo.child("BureauCheckUnit");
+			if (node.empty()) { return -72; }
+			writer.Key("72");
+			writer.String(node.text().as_string());
+
+			//局级验收意见
+			node = nodeQualityCheckInfo.child("ConclusionBureau");
+			if (node.empty()) { return -73; }
+			writer.Key("73");
+			writer.String(node.text().as_string());
+
+			//局级验收时间
+			node = nodeQualityCheckInfo.child("BureauCheckDate");
+			if (node.empty()) { return -74; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("74");
+				writer.Int64(tm_t);
+			}
+		}
+	}
+
+	writer.EndObject();
+
+	out_json->assign(strbuf.GetString(), strbuf.GetSize());
+
+	return 0;
+}
+#endif
+
+#if 0
+#include "../custom_metadata_process.hpp"
+#include "../parsexml/pugixml.hpp"
+#include <geo_coord_transform/us_spatial_reference.hpp>
+#include <time.h>
+#include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <algorithm>
+#include <vector>
+
+static us_cms_metdata_map metadata_map_array[] =
+{
+	"MaxX"                , 1, 3, 0x00,     //地理范围MaxX
+	"MinX"                , 2, 3, 0x00,		//地理范围MinX
+	"MaxY"                , 3, 3, 0x00,		//地理范围MaxY
+	"MinY"                , 4, 3, 0x00,		//地理范围MinY
+	"ImgRange"            , 5, 1, 0x00,     //地理范围((西南，东南，东北，西北))
+	"ImgCorner"			  , 75, 1, 0x00,    //地理角点
+	"MetaDataFileName"    , 6, 1, 0x03,     //元数据文件名称
+	"ProductName"         , 7, 1, 0x03,		// 产品名称
+	"Owner"               , 8, 1, 0x03,		// 产品版权单位名
+	"Producer"            , 9, 1, 0x03,		// 产品生产单位名
+	"Publisher"           , 10, 1, 0x03,	// 产品出版单位名
+	"ProduceDate"         , 11, 2, 0x0C,	// 产品生产时间
+	"ConfidentialLevel"   , 12, 1, 0x02,	// 密级
+	"GroundResolution"    , 13, 3, 0x30,	// 地面分辨率
+	"ImgColorModel"       , 14, 1, 0x02,	// 影像色彩模式
+	"PixelBits"           , 15, 2, 0x10,	// 像素位数
+	"ImgSize"             , 16, 3, 0x30,	// 整景数据量大小
+	"DataFormat"          , 17, 1, 0x02,	// 数据格式
+	"LongerRadius"        , 18, 1, 0x02,	// 椭球长半径
+	"OblatusRatio"        , 19, 1, 0x02,	// 椭球扁率
+	"GeodeticDatum"       , 20, 1, 0x02,	// 所采用大地基准
+	"MapProjection"       , 21, 1, 0x02,	// 地图投影
+	"CentralMederian"     , 22, 2, 0x10,	// 中央子午线
+	"ZoneDivisionMode"    , 23, 1, 0x02,	// 分带方式
+	"GaussKrugerZoneNo"   , 24, 2, 0x30,	// 高斯 - 克吕格投影带号
+	"CoordinationUnit"    , 25, 1, 0x02,	// 坐标单位
+	"HeightSystem"        , 26, 1, 0x02,	// 高程系统名
+	"HeightDatum"         , 27, 1, 0x02,	// 高程基准
+	"SateName"            , 28, 1, 0x02,	// 卫星名称
+	"PBandSensorType"     , 29, 1, 0x02,	// 全色影像传感器类型
+	"SateResolution"      , 30, 3, 0x30,	// 全色卫星影像分辨率
+	"PbandOrbitCode"      , 31, 1, 0x02,	// 全色卫星影像轨道号
+	"PbandDate"           , 32, 2, 0x0C,	// 全色卫星影像获取时间
+	"MultiBandSensorType" , 33, 1, 0x02,	// 多光谱影像传感器类型
+	"MultiBandNum"        , 34, 2, 0x30,	// 多光谱波段数量
+	"MultiBandName"       , 35, 1, 0x02,	// 多光谱波段名称
+	"MultiBandResolution" , 36, 3, 0x30,	// 多光谱卫星影像分辨率
+	"MultiBandOrbitCode"  , 37, 1, 0x02,	// 多光谱卫星影像轨道号
+	"MultiBandDate"       , 38, 2, 0x0C,	// 多光谱卫星影像获取时间
+	"SateImgQuality"      , 39, 1, 0x03,	// 卫星影像数据质量评价
+	"GridInterval"        , 40, 2, 0x30,	// DEM格网间距
+	"DEMPrecision"        , 41, 1, 0x02,	// DEM精度情况
+	"ControlSource"       , 42, 1, 0x02,	// 控制资料来源
+	"SateOriXRMS"         , 43, 3, 0x30,	// 外参数解算平面中误差(X)
+	"SateOriYRMS"         , 44, 3, 0x30,	// 外参数解算平面中误差(Y)
+	"SateOriZRMS"         , 45, 3, 0x30,	// 外参数解算高程中误差
+	"ATProducerName"      , 46, 1, 0x02,	// 参数解算作业员
+	"ATCheckerName"       , 47, 1, 0x02,	// 参数解算检查员
+	"ManufactureType"     , 48, 1, 0x02,	// 数据生产方式
+	"SteroEditQuality"    , 49, 1, 0x02,	// 立体模型编辑情况
+	"OrthoRectifySoftWare", 50, 1, 0x02,	// 正射纠正软件
+	"ResampleMethod"      , 51, 1, 0x02,	// 重采样方法
+	"OrthoRectifyQuality" , 52, 1, 0x02,	// 正射纠正总结
+	"OrthoRectifyName"    , 53, 1, 0x02,	// 正射纠正作业员
+	"OrthoCheckName"      , 54, 1, 0x02,	// 正射纠正检查员
+	"WestMosaicMaxError"  , 55, 3, 0x30,	// 西边最大接边差
+	"NorthMosaicMaxError" , 56, 3, 0x30,	// 北边最大接边差
+	"EastMosaicMaxError"  , 57, 3, 0x30,	// 东边最大接边差
+	"SouthMosaicMaxError" , 58, 3, 0x30,	// 南边最大接边差
+	"MosaicQuality"       , 59, 1, 0x02,	// 接边质量评价
+	"MosaicProducerName"  , 60, 1, 0x02,	// 接边作业员
+	"MosaicCheckerName"   , 61, 1, 0x02,	// 接边检查员
+	"MultiBRectifyXRMS"   , 62, 3, 0x30,	// 多光谱配准纠正中误差(X)
+	"MultiBRectifyYRMS"   , 63, 3, 0x30,	// 多光谱配准纠正中误差(Y)
+	"CheckPointNum"       , 64, 2, 0x30,	// 检查点个数
+	"CheckRMS"            , 65, 3, 0x30,	// 检查点平面中误差
+	"CheckMAXErr"         , 66, 3, 0x30,	// 检查点最大误差
+	"ConclusionInstitute" , 67, 1, 0x02,	// 院级检查结论
+	"InstituteCheckUnit"  , 68, 1, 0x03,	// 院级检查单位
+	"InstituteCheckName"  , 69, 1, 0x02,	// 院级检查人
+	"InstituteCheckDate"  , 70, 2, 0x0C,	// 院级检查时间
+	"BureauCheckName"     , 71, 1, 0x02,	// 局级验收人
+	"BureauCheckUnit"     , 72, 1, 0x03,	// 局级验收单位
+	"ConclusionBureau"    , 73, 1, 0x02,	// 局级验收意见
+	"BureauCheckDate"     , 74, 2, 0x0C		// 局级验收时间
+};
+
+const us_cms_metdata_map * us_get_cms_metadata_map_table(int * out_size)
+{
+	*out_size = sizeof(metadata_map_array) / sizeof(us_cms_metdata_map);
+	return metadata_map_array;
+}
+
+#ifdef _WIN32
+#include <Windows.h>
+inline std::string UTF8toANSI(const std::string &strUTF8)
+{
+	//获取转换为多字节后需要的缓冲区大小，创建多字节缓冲区
+	UINT nLen = MultiByteToWideChar(CP_UTF8, NULL, strUTF8.data(), -1, NULL, NULL);
+	std::vector<WCHAR> wszBuffer(nLen + 1);
+	nLen = MultiByteToWideChar(CP_UTF8, NULL, strUTF8.data(), -1, wszBuffer.data(), nLen);
+	wszBuffer[nLen] = 0;
+
+	nLen = WideCharToMultiByte(CP_ACP, NULL, wszBuffer.data(), -1, NULL, NULL, NULL, NULL);
+	std::vector<CHAR> szBuffer(nLen + 1);
+	nLen = WideCharToMultiByte(CP_ACP, NULL, wszBuffer.data(), -1,
+		szBuffer.data(), nLen, NULL, NULL);
+	szBuffer[nLen] = 0;
+	std::string strANSI(szBuffer.data(), nLen);
+	//清理内存
+	return strANSI;
+}
+#else
+#define UTF8toANSI(strUTF8) strUTF8
+#endif // _WIN32
+
+
+#define _US_MAX(a,b) (((a) > (b)) ? (a) : (b))
+#define _US_MIN(a,b) (((a) < (b)) ? (a) : (b))
+
+
+int us_read_cms_metadata_record(const std::string& index, std::string* out_json)
+{
+	static unispace::us_spatial_reference cgcs2000("proj=longlat +ellps=GRS80 +no_defs");
+
+	if (index.size() < 6) { puts("index < 6"); return -1; }
+	std::string xmlpath = index;
+	xmlpath.replace(index.size() - 5, 5, "Y.XML");
+	puts(xmlpath.c_str());
+
+	pugi::xml_document doc;
+	/*加载xml文件*/
+	pugi::xml_parse_result result = doc.load_file(UTF8toANSI(xmlpath).c_str(), 116U, pugi::encoding_utf8);
+	if (!result)
+	{
+		out_json->assign(result.description());
+		puts("load");
+		puts(UTF8toANSI(xmlpath).c_str());
+		return -1;
+	}
+
+	rapidjson::StringBuffer strbuf;
+	strbuf.Reserve(1024);
+	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+
+	/*读取xml文件，写入json*/
+	writer.StartObject();
+
+	/*产品基本情况部分*/
+	int GaussKrugerZoneNo = -1;
+	pugi::xml_node nodeBasicDataContent = doc.child("Metadatafile").child("BasicDataContent");
+	if (nodeBasicDataContent.empty()) { puts("10000"); return -10000; }
+	{
+		{
+			//地面分辨率
+			pugi::xml_node node = nodeBasicDataContent.child("GroundResolution");
+			if (node.empty()) { puts("13"); return -13; }
+			writer.Key("13");
+			writer.Double(node.text().as_double());
+
+			//整景数据量大小
+			node = nodeBasicDataContent.child("ImgSize");
+			if (node.empty()) { puts("16"); return -16; }
+			writer.Key("16");
+			writer.Double(node.text().as_double());
+
+			//像素位数
+			node = nodeBasicDataContent.child("PixelBits");
+			if (node.empty()) { puts("15"); return -15; }
+			{
+				writer.Key("15");
+				writer.Int(node.text().as_int());
+			}
+
+			//产品生产时间
+			node = nodeBasicDataContent.child("ProduceDate");
+			if (node.empty()) { puts("11"); return -11; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("11");
+				writer.Int64(tm_t);
+			}
+
+			//元数据文件名称
+			node = nodeBasicDataContent.child("MetaDataFileName");
+			if (node.empty()) { puts("6"); return -6; }
+			writer.Key("6");
+			writer.String(node.text().as_string());
+
+			//产品名称
+			node = nodeBasicDataContent.child("ProductName");
+			if (node.empty()) { puts("7"); return -7; }
+			writer.Key("7");
+			writer.String(node.text().as_string());
+
+			//产品版权单位名
+			node = nodeBasicDataContent.child("Owner");
+			if (node.empty()) { puts("8"); return -8; }
+			writer.Key("8");
+			writer.String(node.text().as_string());
+
+			//产品生产单位名
+			node = nodeBasicDataContent.child("Producer");
+			if (node.empty()) { puts("9"); return -9; }
+			writer.Key("9");
+			writer.String(node.text().as_string());
+
+			//产品出版单位名
+			node = nodeBasicDataContent.child("Publisher");
+			if (node.empty()) { puts("10"); return -10; }
+			writer.Key("10");
+			writer.String(node.text().as_string());
+
+			//密级
+			node = nodeBasicDataContent.child("ConfidentialLevel");
+			if (node.empty()) { puts("12"); return -12; }
+			writer.Key("12");
+			writer.String(node.text().as_string());
+
+			//影像色彩模式
+			node = nodeBasicDataContent.child("ImgColorModel");
+			if (node.empty()) { puts("14"); return -14; }
+			writer.Key("14");
+			writer.String(node.text().as_string());
+
+			//数据格式
+			node = nodeBasicDataContent.child("DataFormat");
+			if (node.empty()) { puts("17"); return -17; }
+			writer.Key("17");
+			writer.String(node.text().as_string());
+		}
+
+		/*椭球体的部分*/
+		pugi::xml_node nodeMathFoundation = nodeBasicDataContent.child("MathFoundation");
+		if (nodeMathFoundation.empty()) { puts("10001"); return -10001; }
+		{
+			//椭球长半径
+			pugi::xml_node node = nodeMathFoundation.child("LongerRadius");
+			if (node.empty()) { puts("18"); return -18; }
+			writer.Key("18");
+			writer.String(node.text().as_string());
+
+			//椭球扁率
+			node = nodeMathFoundation.child("OblatusRatio");
+			if (node.empty()) { puts("19"); return -19; }
+			writer.Key("19");
+			writer.String(node.text().as_string());
+
+			//所采用大地基准
+			node = nodeMathFoundation.child("GeodeticDatum");
+			if (node.empty()) { puts("20"); return -20; }
+			writer.Key("20");
+			writer.String(node.text().as_string());
+
+			//地图投影
+			node = nodeMathFoundation.child("MapProjection");
+			if (node.empty()) { puts("21"); return -21; }
+			writer.Key("21");
+			writer.String(node.text().as_string());
+
+			//中央子午线
+			node = nodeMathFoundation.child("CentralMederian");
+			if (node.empty()) { puts("22"); return -22; }
+			writer.Key("22");
+			writer.Int(node.text().as_int());
+
+			//分带方式
+			node = nodeMathFoundation.child("ZoneDivisionMode");
+			if (node.empty()) { puts("23"); return -23; }
+			writer.Key("23");
+			writer.String(node.text().as_string());
+
+			//高斯 - 克吕格投影带号
+			node = nodeMathFoundation.child("GaussKrugerZoneNo");
+			if (node.empty()) { puts("24"); return -24; }
+			GaussKrugerZoneNo = node.text().as_int();
+			if (GaussKrugerZoneNo < 0 || GaussKrugerZoneNo > 120) { puts("7777"); return -7; }
+			writer.Key("24");
+			writer.Int(GaussKrugerZoneNo);
+
+			//坐标单位
+			node = nodeMathFoundation.child("CoordinationUnit");
+			if (node.empty()) { puts("25"); return -25; }
+			writer.Key("25");
+			writer.String(node.text().as_string());
+
+			//高程系统名
+			node = nodeMathFoundation.child("HeightSystem");
+			if (node.empty()) { puts("26"); return -26; }
+			writer.Key("26");
+			writer.String(node.text().as_string());
+
+			//高程基准
+			node = nodeMathFoundation.child("HeightDatum");
+			if (node.empty()) { puts("27"); return -27; }
+			writer.Key("27");
+			writer.String(node.text().as_string());
+
+		}
+
+		/* 地理范围，找出横坐标和纵坐标的最大最小值按浮点数类型存放 */
+		pugi::xml_node nodeImgRange = nodeBasicDataContent.child("ImgRange");
+		if (nodeImgRange.empty()) { puts("10002"); return -10002; }
+		{
+			pugi::xml_node cornernode;
+			double cornerXY[8];
+			/* 西南 东南 东北 西北 */
+			cornernode = nodeImgRange.child("SouthWestAbs");
+			if (cornernode.empty()) { puts("5"); return -5; }
+			cornerXY[0] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("SouthEastAbs");
+			if (cornernode.empty()) { puts("5"); return -5; }
+			cornerXY[1] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthEastAbs");
+			if (cornernode.empty()) { puts("5"); return -5; }
+			cornerXY[2] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthWestAbs");
+			if (cornernode.empty()) { puts("5"); return -5; }
+			cornerXY[3] = cornernode.text().as_double();
+
+			cornernode = nodeImgRange.child("SouthWestOrd");
+			if (cornernode.empty()) { puts("5"); return -5; }
+			cornerXY[4] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("SouthEastOrd");
+			if (cornernode.empty()) { puts("5"); return -5; }
+			cornerXY[5] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthEastOrd");
+			if (cornernode.empty()) { puts("5"); return -5; }
+			cornerXY[6] = cornernode.text().as_double();
+			cornernode = nodeImgRange.child("NorthWestOrd");
+			if (cornernode.empty()) { puts("5"); return -5; }
+			cornerXY[7] = cornernode.text().as_double();
+
+			/* 原始投影坐标有效范围角点 */
+			char buffer[1024];
+			int len = sprintf(buffer, "[%g %g,%g %g,%g %e,%g %g]", cornerXY[0], cornerXY[4],
+				cornerXY[1], cornerXY[5], cornerXY[2], cornerXY[6], cornerXY[3], cornerXY[7]);
+			writer.Key("75");
+			writer.String(buffer, len);
+			// 坐标转换--投影转经纬度
+			int32_t false_easting = 500000;
+			if (cornerXY[0] > 10000000.0) {
+				false_easting += GaussKrugerZoneNo * 1000000;
+			}
+			sprintf(buffer, "proj=tmerc +lat_0=0 +lon_0=120 +k=1 +x_0=%d +y_0=0 +ellps=GRS80 +units=m +no_defs", false_easting);
+			unispace::us_spatial_reference GKProj(buffer);
+
+			unispace::us_spatial_reference::transform(GKProj, cgcs2000, 4, 1,
+				&cornerXY[0], &cornerXY[4], NULL);
+
+			writer.Key("1");
+			writer.Double(_US_MAX(_US_MAX(cornerXY[0], cornerXY[1]), _US_MAX(cornerXY[2], cornerXY[3])));
+
+			writer.Key("2");
+			writer.Double(_US_MIN(_US_MIN(cornerXY[0], cornerXY[1]), _US_MIN(cornerXY[2], cornerXY[3])));
+
+			writer.Key("3");
+			writer.Double(_US_MAX(_US_MAX(cornerXY[4], cornerXY[5]), _US_MAX(cornerXY[6], cornerXY[7])));
+
+			writer.Key("4");
+			writer.Double(_US_MIN(_US_MIN(cornerXY[4], cornerXY[5]), _US_MIN(cornerXY[6], cornerXY[7])));
+
+			/*地理坐标范围以((x0 y0,x1 y1,x2 y2,x3 y3,x0 y0))形式存入json*/
+			len = sprintf(buffer, "((%e %e,%e %e,%e %e,%e %e,%e %e))",
+				cornerXY[0], cornerXY[4], cornerXY[1], cornerXY[5], cornerXY[2], cornerXY[6],
+				cornerXY[3], cornerXY[7], cornerXY[0], cornerXY[4]);
+			writer.Key("5");
+			writer.String(buffer, len);
+		}
+	}
+
+
+	/*数据源情况部分*/
+	pugi::xml_node nodeImgSource = doc.child("Metadatafile").child("ImgSource");
+	if (nodeImgSource.empty()) { puts("10003"); return -10003; }
+	{
+		{
+			//卫星名称
+			pugi::xml_node node = nodeImgSource.child("SateName");
+			if (node.empty()) { puts("28"); return -28; }
+			writer.Key("28");
+			writer.String(node.text().as_string());
+		}
+
+		pugi::xml_node nodePanBand = nodeImgSource.child("PanBand");
+		if (nodePanBand.empty()) { puts("10004"); return -10004; }
+		{
+			//全色影像传感器类型
+			pugi::xml_node node = nodePanBand.child("PBandSensorType");
+			if (node.empty()) { puts("29"); return -29; }
+			writer.Key("29");
+			writer.String(node.text().as_string());
+
+			//全色卫星影像分辨率
+			node = nodePanBand.child("SateResolution");
+			if (node.empty()) { puts("30"); return -30; }
+			writer.Key("30");
+			writer.Double(node.text().as_double());
+
+			//全色卫星影像轨道号
+			node = nodePanBand.child("PBandOrbitCode");
+			if (node.empty()) { puts("31"); return -31; }
+			writer.Key("31");
+			writer.String(node.text().as_string());
+
+			//全色卫星影像获取时间
+			node = nodePanBand.child("PBandDate");
+			if (node.empty()) { puts("32"); return -32; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("32");
+				writer.Int64(tm_t);
+			}
+		}
+
+		pugi::xml_node nodeMultiBand = nodeImgSource.child("MultiBand");
+		if (nodeMultiBand.empty()) { puts("10005"); return -10005; }
+		{
+			//多光谱影像传感器类型
+			pugi::xml_node node = nodeMultiBand.child("MultiBandSensorType");
+			if (nodePanBand.empty()) { puts("33"); return -33; }
+			writer.Key("33");
+			writer.String(node.text().as_string());
+
+			//多光谱波段数量
+			node = nodeMultiBand.child("MultiBandNum");
+			if (nodePanBand.empty()) { puts("34"); return -34; }
+			writer.Key("34");
+			writer.Int(node.text().as_int());
+
+			//多光谱波段名称
+			node = nodeMultiBand.child("MultiBandName");
+			if (nodePanBand.empty()) { puts("35"); return -35; }
+			writer.Key("35");
+			writer.String(node.text().as_string());
+
+			//多光谱卫星影像分辨率
+			node = nodeMultiBand.child("MultiBandResolution");
+			if (nodePanBand.empty()) { puts("36"); return -36; }
+			writer.Key("36");
+			writer.Double(node.text().as_double());
+
+			//多光谱卫星影像轨道号
+			node = nodeMultiBand.child("MultiBandOrbitCode");
+			if (nodePanBand.empty()) { puts("37"); return -37; }
+			writer.Key("37");
+			writer.String(node.text().as_string());
+
+			//多光谱卫星影像获取时间
+			node = nodeMultiBand.child("MultiBandDate");
+			if (nodePanBand.empty()) { puts("38"); return -38; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("38");
+				writer.Int64(tm_t);
+			}
+		}
+
+		{
+			//卫星影像数据质量评价
+			pugi::xml_node nodeMultiBand = nodeImgSource.child("SateImgQuality");
+			if (nodeMultiBand.empty()) { puts("39"); return -39; }
+			writer.Key("39");
+			writer.String(nodeMultiBand.text().as_string());
+		}
+	}
+
+	/*数据生产过程信息部分*/
+	pugi::xml_node nodeProduceInfomation = doc.child("Metadatafile").child("ProduceInfomation");
+	if (nodeProduceInfomation.empty()) { puts("10006"); return -10006; }
+	{
+		{
+			//DEM格网间距
+			pugi::xml_node node = nodeProduceInfomation.child("GridInterval");
+			if (node.empty()) { puts("40"); return -40; }
+			writer.Key("40");
+			writer.Int64(node.text().as_llong());
+
+			//DEM精度情况
+			node = nodeProduceInfomation.child("DEMPrecision");
+			if (node.empty()) { puts("41"); return -41; }
+			writer.Key("41");
+			writer.String(node.text().as_string());
+
+			//控制资料来源
+			node = nodeProduceInfomation.child("ControlSource");
+			if (node.empty()) { puts("42"); return -42; }
+			writer.Key("42");
+			writer.String(node.text().as_string());
+		}
+
+		pugi::xml_node nodeImgOrientation = nodeProduceInfomation.child("ImgOrientation");
+		if (nodeImgOrientation.empty()) { puts("10007"); return -10007; }
+		{
+			//外参数解算平面中误差(X)
+			pugi::xml_node node = nodeImgOrientation.child("SateOriXRMS");
+			if (node.empty()) { puts("43"); return -43; }
+			writer.Key("43");
+			writer.Double(node.text().as_double());
+
+			//外参数解算平面中误差(Y)
+			node = nodeImgOrientation.child("SateOriYRMS");
+			if (node.empty()) { puts("44"); return -44; }
+			writer.Key("44");
+			writer.Double(node.text().as_double());
+
+			//外参数解算高程中误差(Z)
+			node = nodeImgOrientation.child("SateOriZRMS");
+			if (node.empty()) { puts("45"); return -45; }
+			writer.Key("45");
+			writer.Double(node.text().as_double());
+
+			//参数解算作业员
+			node = nodeImgOrientation.child("ATProducerName");
+			if (node.empty()) { puts("46"); return -46; }
+			writer.Key("46");
+			writer.String(node.text().as_string());
+
+			//参数解算检查员
+			node = nodeImgOrientation.child("ATCheckerName");
+			if (node.empty()) { puts("47"); return -47; }
+			writer.Key("47");
+			writer.String(node.text().as_string());
+		}
+
+		{
+			//数据生产方式
+			pugi::xml_node node = nodeProduceInfomation.child("ManufactureType");
+			if (node.empty()) { puts("48"); return -48; }
+			writer.Key("48");
+			writer.String(node.text().as_string());
+
+			//立体模型编辑情况
+			node = nodeProduceInfomation.child("SteroEditQuality");
+			if (node.empty()) { puts("49"); return -49; }
+			writer.Key("49");
+			writer.String(node.text().as_string());
+
+			//正射纠正软件
+			node = nodeProduceInfomation.child("OrthoRectifySoftware");
+			if (node.empty()) { puts("50"); return -50; }
+			writer.Key("50");
+			writer.String(node.text().as_string());
+
+			//重采样方法
+			node = nodeProduceInfomation.child("ResampleMethod");
+			if (node.empty()) { puts("51"); return -51; }
+			writer.Key("51");
+			writer.String(node.text().as_string());
+
+			//正射纠正总结
+			node = nodeProduceInfomation.child("OrthoRectifyQuality");
+			if (node.empty()) { puts("52"); return -52; }
+			writer.Key("52");
+			writer.String(node.text().as_string());
+
+			//正射纠正作业员
+			node = nodeProduceInfomation.child("OrthoRectifyName");
+			if (node.empty()) { puts("53"); return -53; }
+			writer.Key("53");
+			writer.String(node.text().as_string());
+
+			//正射纠正检查员
+			node = nodeProduceInfomation.child("OrthoCheckName");
+			if (node.empty()) { puts("54"); return -54; }
+			writer.Key("54");
+			writer.String(node.text().as_string());
+		}
+
+		pugi::xml_node nodeMosaicInfo = nodeProduceInfomation.child("MosaicInfo");
+		if (nodeMosaicInfo.empty()) { puts("10008"); return -10008; }
+		{
+			//西边最大接边差
+			pugi::xml_node node = nodeMosaicInfo.child("WestMosaicMaxError");
+			if (node.empty()) { puts("55"); return -55; }
+			writer.Key("55");
+			writer.Double(node.text().as_double());
+
+			//北边最大接边差
+			node = nodeMosaicInfo.child("NorthMosaicMaxError");
+			if (node.empty()) { puts("56"); return -56; }
+			writer.Key("56");
+			writer.Double(node.text().as_double());
+
+			//东边最大接边差
+			node = nodeMosaicInfo.child("EastMosaicMaxError");
+			if (node.empty()) { puts("57"); return -57; }
+			writer.Key("57");
+			writer.Double(node.text().as_double());
+
+			//南边最大接边差
+			node = nodeMosaicInfo.child("SouthMosaicMaxError");
+			if (node.empty()) { puts("58"); return -58; }
+			writer.Key("58");
+			writer.Double(node.text().as_double());
+
+			//接边质量评价
+			node = nodeMosaicInfo.child("MosaicQuality");
+			if (node.empty()) { puts("59"); return -59; }
+			writer.Key("59");
+			writer.String(node.text().as_string());
+
+			//接边作业员
+			node = nodeMosaicInfo.child("MosaicProducerName");
+			if (node.empty()) { puts("60"); return -60; }
+			writer.Key("60");
+			writer.String(node.text().as_string());
+
+			//接边检查员
+			node = nodeMosaicInfo.child("MosaicCheckerName");
+			if (node.empty()) { puts("61"); return -61; }
+			writer.Key("61");
+			writer.String(node.text().as_string());
+
+			//多光谱配准纠正中误差(X)
+			node = nodeMosaicInfo.child("MultiBRectifyXRMS");
+			if (node.empty()) { puts("62"); return -62; }
+			writer.Key("62");
+			writer.Double(node.text().as_double());
+
+			//多光谱配准纠正中误差(Y)
+			node = nodeMosaicInfo.child("MultiBRectifyYRMS");
+			if (node.empty()) { puts("63"); return -63; }
+			writer.Key("63");
+			writer.Double(node.text().as_double());
+		}
+
+		pugi::xml_node nodeQualityCheckInfo = nodeProduceInfomation.child("QualityCheckInfo");
+		if (nodeQualityCheckInfo.empty()) { puts("10009"); return -10009; }
+		{
+			//检查点个数
+			pugi::xml_node node = nodeQualityCheckInfo.child("CheckPointNum");
+			if (node.empty()) { puts("64"); return -64; }
+			writer.Key("64");
+			writer.Int(node.text().as_int());
+
+			//检查点平面中误差
+			node = nodeQualityCheckInfo.child("CheckRMS");
+			if (node.empty()) { puts("65"); return -65; }
+			writer.Key("65");
+			writer.Double(node.text().as_double());
+
+			//检查点最大误差
+			node = nodeQualityCheckInfo.child("CheckMAXErr");
+			if (node.empty()) { puts("66"); return -66; }
+			writer.Key("66");
+			writer.Double(node.text().as_double());
+
+			//院级检查结论
+			node = nodeQualityCheckInfo.child("ConclusionInstitute");
+			if (node.empty()) { puts("67"); return -67; }
+			writer.Key("67");
+			writer.String(node.text().as_string());
+
+			//院级检查单位
+			node = nodeQualityCheckInfo.child("InstituteCheckUnit");
+			if (node.empty()) { puts("68"); return -68; }
+			writer.Key("68");
+			writer.String(node.text().as_string());
+
+			//院级检查人
+			node = nodeQualityCheckInfo.child("InstituteCheckName");
+			if (node.empty()) { puts("69"); return -69; }
+			writer.Key("69");
+			writer.String(node.text().as_string());
+
+			//院级检查时间
+			node = nodeQualityCheckInfo.child("InstituteCheckDate");
+			if (node.empty()) { puts("70"); return -70; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("70");
+				writer.Int64(tm_t);
+			}
+
+			//局级验收人
+			node = nodeQualityCheckInfo.child("BureauCheckName");
+			if (node.empty()) { puts("71"); return -71; }
+			writer.Key("71");
+			writer.String(node.text().as_string());
+
+			//局级验收单位
+			node = nodeQualityCheckInfo.child("BureauCheckUnit");
+			if (node.empty()) { puts("72"); return -72; }
+			writer.Key("72");
+			writer.String(node.text().as_string());
+
+			//局级验收意见
+			node = nodeQualityCheckInfo.child("ConclusionBureau");
+			if (node.empty()) { puts("73"); return -73; }
+			writer.Key("73");
+			writer.String(node.text().as_string());
+
+			//局级验收时间
+			node = nodeQualityCheckInfo.child("BureauCheckDate");
+			if (node.empty()) { puts("74"); return -74; }
+			{
+				std::string s = node.text().as_string();
+				time_t tm_t;
+				tm t_s;
+				t_s.tm_year = atoi(s.substr(0, 4).c_str()) - 1900;
+				t_s.tm_mon = atoi(s.substr(5, 2).c_str()) - 1;
+				t_s.tm_mday = atoi(s.substr(6, 2).c_str());
+				t_s.tm_hour = 0;
+				t_s.tm_min = 0;
+				t_s.tm_sec = 0;
+				tm_t = mktime(&t_s);
+				writer.Key("74");
+				writer.Int64(tm_t);
+			}
+		}
+	}
+
+	writer.EndObject();
+
+	out_json->assign(strbuf.GetString(), strbuf.GetSize());
+
+	return 0;
+}
+
+
+
+#endif
+
+
+#endif

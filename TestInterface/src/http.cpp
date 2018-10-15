@@ -1,7 +1,6 @@
 #include "http.h"
 #include "field.h"
 #include <iostream>
-#include "mysql.h"
 #include <algorithm>
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
@@ -18,6 +17,10 @@
 
 #include <data_storage/us_data_storage_manager.hpp>
 
+
+#define BUFMAXSIZE 50
+
+#if 0
 
 int us_cms_http_get_search2(
 	const std::string& path,
@@ -1367,10 +1370,10 @@ int us_cms_http_get_search2(
 	return 200;
 }
 
+#endif
 
-
-
-int us_cms_http_post_rebuild(
+#if 0
+int us_cms_http_post_rebuild1(
 	const std::string& path,
 	const std::multimap< std::string, std::string >& headers,
 	const std::multimap< std::string, std::string >& query_parameters,
@@ -1699,9 +1702,10 @@ int us_cms_http_post_rebuild(
 
 	return 200;
 }
+#endif
 
-
-int us_cms_http_get_getm(
+#if 0
+int us_cms_http_get_getm1(
 	const std::string& path,
 	const std::multimap< std::string, std::string >& headers,
 	const std::multimap< std::string, std::string >& query_parameters,
@@ -2289,9 +2293,10 @@ int us_cms_http_get_getm(
 
 	return 200;
 }
+#endif
 
-
-int us_cms_http_post_refresh(
+#if 0
+int us_cms_http_post_refresh22(
 	const std::string& path,
 	const std::multimap< std::string, std::string >& headers,
 	const std::multimap< std::string, std::string >& query_parameters,
@@ -2538,11 +2543,11 @@ int us_cms_http_post_refresh(
 
 	return 200;
 }
+#endif
 
 
 
-
-
+#if 0
 /*使用多线程的方法去重建数据记录表*/
 std::mutex m_mutex_img;
 std::mutex m_mutex_ngcc;
@@ -2778,14 +2783,6 @@ int us_cms_http_post_rebuild_addthread(
 }
 
 
-
-
-
-
-
-
-
-
 int create()
 {
 	/*连接数据库*/
@@ -2889,11 +2886,12 @@ int create_chufaqi()
 	return 0;
 }
 
+#endif
 
-
+#if 0
 
 /*查询*/
-int us_cms_http_get_search(
+int us_cms_http_get_search3(
 	const std::string& path,
 	const std::multimap< std::string, std::string >& headers,
 	const std::multimap< std::string, std::string >& query_parameters,
@@ -2907,18 +2905,18 @@ int us_cms_http_get_search(
 
 
 	/*连接数据库*/
-	/*std::string hostip = "localhost";
+	std::string hostip = "localhost";
 	int port = 3306;
 	std::string user = "root";
 	std::string password = "";
 	std::string database = "metadata2";
-	std::string tablename = "ngcc_metadata";*/
-	std::string hostip = "192.168.0.200";
+	std::string tablename = "ngcc_metadata";
+	/*std::string hostip = "192.168.0.200";
 	int port = 3306;
 	std::string user = "root";
 	std::string password = "123456";
 	std::string database = "unispace";
-	std::string tablename = "ngcc_metadata";
+	std::string tablename = "ngcc_metadata";*/
 
 	/*初始化mysql*/
 	MYSQL * m_mysql = mysql_init(NULL);  //在程序使用Mysql的最开始必须调用mysql_int()初始化
@@ -3265,6 +3263,13 @@ int us_cms_http_get_search(
 			sql.append("(`").append(dbfiled_min_x).append("` >= ").append(x_min_s).append(" and `").append(dbfiled_max_x).append("` <= ").append(x_max_s);
 			sql.append(" and `").append(dbfiled_min_y).append("` >= ").append(y_min_s).append(" and `").append(dbfiled_max_y).append("` <= ").append(y_max_s).append("))");
 
+
+			/*少考虑了一种情况，即查询所选的区域范围在数据库中某个影像的地理范围内*/
+			/*sql.append(" or ");
+
+			sql.append("(`").append(dbfiled_min_x).append("` <= ").append(x_min_s).append(" and `").append(dbfiled_max_x).append("` >= ").append(x_max_s);
+			sql.append(" and `").append(dbfiled_min_y).append("` <= ").append(y_min_s).append(" and `").append(dbfiled_max_y).append("` >= ").append(y_max_s).append("))");*/
+
 			sql.append(" and ");
 		}
 	}
@@ -3357,3 +3362,3110 @@ int us_cms_http_get_search(
 	}
 	return 200;
 }
+#endif
+
+#if 0
+int test_mysql_stmt()
+{
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "";
+	std::string database = "mytest_db";
+	std::string tablename = "tutorials_tb1";
+
+	/*初始化mysql*/
+	MYSQL* pMysql = mysql_init(NULL);  //在程序使用Mysql的最开始必须调用mysql_int()初始化
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		std::cout << rntStr << std::endl;
+		return -1;
+	}
+
+	//连接数据库服务器
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		std::cout << rntStr << std::endl;
+		return -1;
+	}
+
+	/*
+	*对于多次执行的语句，预处理执行比直接执行快，
+	*主要原因是 ，它仅对查询执行一次解析操作，
+	*每次执行预处理语句是，仅需发送参数的数据，从而减少网络通信量
+	**/
+	MYSQL_STMT* pStmtMysql = mysql_stmt_init(pMysql);  //初始化预处理环境 生成一个预处理句柄
+	if (!pStmtMysql)
+	{
+		std::cout << " mysql_stmt_init(), out of memory\n" << std::endl;
+		return -1;
+	}
+
+	/**
+	* 将问号字符嵌入到适当位置的sql字符串中
+	* 标记尽在sql语句中某些位置合法，如：vlues()列表中指定列的列值，或者where子句的列进行比较所指定的比较值
+	**/
+	std::string sqlInsert = "insert into tutorials_tb1(title, author) values(?,?)";
+	if (mysql_stmt_prepare(pStmtMysql, sqlInsert.c_str(), sqlInsert.size()))
+	{
+		std::cout << "mysql_stmt_prepare failed, " << mysql_stmt_error(pStmtMysql) << std::endl;
+		return -1;
+	}
+
+	//返回预准备语句中存在的参数标记数量
+	int paraCount = mysql_stmt_param_count(pStmtMysql);
+	if (paraCount != 2)
+	{
+		std::cout << "mysql_stmt_param_count failed, " << mysql_stmt_error(pStmtMysql) << std::endl;
+		return -1;
+	}
+
+	unsigned long strLength1 = 0;
+	unsigned long strLength2 = 0;
+
+	std::string title;
+
+	//此结构用于语句输入（发送到服务器的数据值）和输出（从服务器返回的结果值）
+	MYSQL_BIND bind[3];
+	memset(bind, 0, sizeof(bind));
+	bind[0].buffer_type = MYSQL_TYPE_STRING;
+	bind[0].buffer = (char*)title.data();
+	bind[0].buffer_length = BUFMAXSIZE;
+	bind[0].is_null = (bool*)0;
+	bind[0].length = &strLength1;
+
+	std::string author;
+	bind[1].buffer_type = MYSQL_TYPE_STRING;
+	bind[1].buffer = (char*)author.data();
+	bind[1].buffer_length = BUFMAXSIZE;
+	bind[1].is_null = (bool*)0;
+	bind[1].length = &strLength2;
+
+	/*std::string date;
+	bind[2].buffer_type = MYSQL_TYPE_DATE;
+	bind[2].buffer = (char*)date.data();
+	bind[2].buffer_length = BUFMAXSIZE;
+	bind[2].is_null = (bool*)0;
+	bind[2].length = 0; */ /*对于数字和时间类型 length将会被忽略，因为buffer_type值确定数据值的长度*/
+
+	//把绑定变量设置到 预处理环境下
+	if (mysql_stmt_bind_param(pStmtMysql, bind))
+	{
+		std::cout << "mysql_stmt_bind_param failed, " << mysql_stmt_error(pStmtMysql) << std::endl;
+		return -1;
+	}
+
+	//插入第一条记录
+	title = "C/C++";
+	strLength1 = title.size();
+	author = "uuu";
+	strLength2 = author.size();
+	//date = "2018-01-02";
+	if (mysql_stmt_execute(pStmtMysql))
+	{
+		std::cout << "mysql_stmt_execute, failed, " << mysql_stmt_error(pStmtMysql) << std::endl;
+		return -1;
+	}
+
+
+	std::string sqlSelect = "select id, title, author  from tutorials_tb1 where id = ?";
+	if (mysql_stmt_prepare(pStmtMysql, sqlSelect.data(), sqlSelect.size()))
+	{
+		std::cout << "mysql_stmt_prepare failed, " << mysql_stmt_error(pStmtMysql) << std::endl;
+		return -1;
+	}
+	int selectParamCount = mysql_stmt_param_count(pStmtMysql); /*查看有几个预处理参数*/
+	if (selectParamCount != 1)
+	{
+		std::cout << "mysql_stmt_param_count failed, " << mysql_stmt_error(pStmtMysql) << std::endl;
+		return -1;
+	}
+
+	int id;
+	MYSQL_BIND bind1;
+	memset(&bind1, 0, sizeof(bind1));
+	bind1.buffer_type = MYSQL_TYPE_LONG;
+	bind1.buffer_length = BUFMAXSIZE;
+	bind1.buffer = &id;
+	bind1.is_null = (bool *)0;
+	
+	id = 1;
+	if (mysql_stmt_bind_param(pStmtMysql, &bind1))
+	{
+		std::cout << "mysql_stmt_bind_param failed, " << mysql_stmt_error(pStmtMysql) << std::endl;
+		return -1;
+	}
+
+	id = 1;
+	if (mysql_stmt_execute(pStmtMysql))
+	{
+		std::cout << "mysql_stmt_execute failed, " << mysql_stmt_error(pStmtMysql) << std::endl;
+		return -1;
+	}
+
+	//将结果集中输出列关联到数据缓冲区和长度缓冲区
+	int resultId;
+	std::string resultTitle, resultAuthor;
+	int resultDate;
+
+
+
+	MYSQL_BIND resultBind[3];
+	memset(resultBind, 0, sizeof(resultBind));
+	resultBind[0].buffer = &resultId;
+	resultBind[0].is_null = (bool*)0;
+	resultBind[0].buffer_type = MYSQL_TYPE_LONG;
+
+	resultBind[1].buffer = (char*)resultTitle.data();
+	resultBind[1].is_null = (bool*)0;
+	resultBind[1].buffer_type = MYSQL_TYPE_STRING;
+
+	resultBind[2].buffer = (char*)resultAuthor.data();
+	resultBind[2].is_null = (bool*)0;
+	resultBind[2].buffer_type = MYSQL_TYPE_STRING;
+
+	if (mysql_stmt_bind_result(pStmtMysql, resultBind))
+	{
+		std::cout << "mysql_stmt_bind_result failed, " << mysql_stmt_error(pStmtMysql) << std::endl;
+		return -1;
+	}
+
+	unsigned long rows = mysql_stmt_affected_rows(pStmtMysql);
+
+/*
+	mysql_stmt_store_result(pStmtMysql);
+	while (!mysql_stmt_fetch(pStmtMysql))
+	{
+		if (!resultBind[0])
+	}
+*/
+
+	/*mysql_stmt_fetch(pStmtMysql)*/
+
+
+	return 0;
+
+	/*用于绑定传递给sql语句中的参数据标记的输入数据，
+	* 它使用MYSQL_BIND来提供数据
+	* 将参数数据值绑定到缓冲区，以供使用 mysql_stmt_execute()
+	*/
+	//mysql_stmt_bind_param(pStmtMysql, bind);
+
+}
+
+
+pre_statement::pre_statement()
+{
+	m_stmt = NULL;
+	m_param_bind = NULL;
+	m_result_bind = NULL;
+	m_result = NULL;
+	m_param_count = 0;
+	m_result_count = 0;
+}
+
+pre_statement::~pre_statement()
+{
+	free();
+}
+
+int pre_statement::init(MYSQL* mysql, std::string& sql)
+{
+	//初始化预处理器
+	m_stmt = mysql_stmt_init(mysql);
+	if (!m_stmt)
+	{
+		return 1;
+	}
+
+	//将sql语句插入
+	if (mysql_stmt_prepare(m_stmt, sql.c_str(), sql.size()))
+	{
+		return 1;
+	}
+
+	// ?（预处理参数） 的个数
+	m_param_count = mysql_stmt_param_count(m_stmt);
+	if (m_param_count > 0)
+	{
+		m_param_bind = new MYSQL_BIND[m_param_count];
+		if (!m_param_bind)
+		{
+			return 1;
+		}
+		memset(m_param_bind, 0, sizeof(MYSQL_BIND)*m_param_count);
+	}
+	return 0;
+}
+
+//设置预处理值（int类型）
+int pre_statement::set_param_bind(int index, int& value)
+{
+	if (index >= m_param_count)
+	{
+		perror("索引超出总数！\n");
+		return 1;
+	}
+	m_param_bind[index].buffer_type = MYSQL_TYPE_LONG;
+	m_param_bind[index].buffer = &value;
+	return 0;
+}
+
+//设置预处理值（string类型）
+int pre_statement::set_param_bind(int index, std::string& value)
+{
+	if (index >= m_param_count)
+	{
+		perror("索引超出总数！\n");
+		return 1;
+	}
+	m_param_bind[index].buffer_type = MYSQL_TYPE_STRING;
+	m_param_bind[index].buffer = (void*)(value.c_str());
+	m_param_bind[index].buffer_length = value.size();
+	return 0;
+}
+
+//设置预处理值（时间类型）
+int pre_statement::set_param_bind(int index, MYSQL_TIME& value)
+{
+	if (index >= m_param_count)
+	{
+		perror("索引超出总数！\n");
+		return 1;
+	}
+	m_param_bind[index].buffer_type = MYSQL_TYPE_TIMESTAMP;
+	m_param_bind[index].buffer = &value;
+	m_param_bind[index].buffer_length = sizeof(value);
+	return 0;
+}
+
+//结果参数
+int pre_statement::set_param_result(int index, enum_field_types type, char* buffer, unsigned long buffer_length, unsigned long	*length)
+{
+	if (index >= m_result_count)
+	{
+		perror("索引超出总数！\n");
+		return 1;
+	}
+	m_result_bind[index].buffer_type = type;
+	m_result_bind[index].buffer = buffer;
+	m_result_bind[index].buffer_length = buffer_length;
+	m_result_bind[index].length = length;
+	return 0;
+}
+
+//执行sql语句(用于有增删改的sql语句)
+int pre_statement::execute()
+{
+	if (!m_stmt) /*判断预处理器*/
+	{
+		return 1;
+	}
+	if (mysql_stmt_bind_param(m_stmt, m_param_bind)) /*绑定预处理参数*/
+	{
+		//mysql_stmt_errno(m_stmt);
+		return 1;
+	}
+	if (mysql_stmt_execute(m_stmt)) /*将绑定的预处理参数值发送到服务器，服务器使用新提供的数据替换标记*/
+	{
+		//mysql_stmt_errno(m_stmt);
+		return 1;
+	} 
+	if (0 == mysql_stmt_affected_rows(m_stmt))  /*增删改 发生改变的行数*/
+	{
+		perror("更新失败 没有改变！\n");
+		return 1;
+	}
+	return 0;
+}
+
+/*用于返回结果集的sql语句*/
+int pre_statement::query()
+{
+	if (!m_stmt)
+	{
+		return 1;
+	}
+	if (mysql_stmt_bind_param(m_stmt, m_param_bind)) /*绑定预处理参数*/
+	{
+		//mysql_stmt_errno(m_stmt);
+		return 1;
+	}
+	m_result = mysql_stmt_result_metadata(m_stmt); /*对于返回结果集的sql语句，返回结果集*/
+	if (NULL == m_result)
+	{
+		//mysql_stmt_errno(m_stmt);
+		return 1;
+	}
+	else
+	{
+		m_result_count = mysql_num_fields(m_result);  /*返回结果集中的列数*/
+		m_result_bind = new MYSQL_BIND[m_result_count];  /*创建bind存储空间*/
+		if (!m_result_bind)
+		{
+			return 1;
+		}
+		memset(m_result_bind, 0, sizeof(MYSQL_BIND)*m_result_count);
+	}
+	if (mysql_stmt_execute(m_stmt))  /*生成结果集*/
+	{
+		//mysql_stmt_errno(m_stmt);
+		return 1;
+	}
+	return 0;
+}
+
+int pre_statement::get_result()
+{
+	// mysql_stmt_fetch() 使用mysql_stmt_bind_result绑定的缓冲区 返回行数据
+	if (mysql_stmt_bind_result(m_stmt, m_result_bind))
+	{
+		return 1;
+	}
+
+	// 默认情况下，从服务器获取的每一行数据不会每次都进行缓存
+	// 所以调用mysql_stmt_store_result把所有的结果集数据缓存在客户端
+	if (mysql_stmt_store_result(m_stmt))  
+	{
+		return 1;
+	}
+	return 0;
+}
+
+int pre_statement::fetch_result()
+{
+	//在调用之前，所有的列数据缓冲区必须要被绑定 也就是说得先调用mysql_stmt_bind_result
+	if (!mysql_stmt_fetch(m_stmt))  /*获取结果集中的下一行*/
+	{
+		return 0;
+	}
+	else
+	{
+		return 1;
+	}
+}
+
+void pre_statement::free()
+{
+	if (m_stmt)
+	{
+		mysql_stmt_close(m_stmt);
+		m_stmt = NULL;
+	}
+	if (m_param_bind)
+	{
+		delete[]m_param_bind;
+		m_param_bind = NULL;
+	}
+	if (m_result_bind)
+	{
+		delete[]m_result_bind;
+		m_result_bind = NULL;
+	}
+	if (NULL != m_result)
+	{
+		mysql_free_result(m_result);
+		m_result = NULL;
+	}
+	m_param_count = 0;
+	m_result_count = 0;
+}
+
+
+#endif
+
+
+#if 0
+/*new*/
+
+/// ********************************************************************************
+/// <summary>
+/// 搜索用户元数据
+/// </summary>
+/// <param name="path">HTTP GET请求路径</param>
+/// <param name="headers">HTTP请求包头</param>
+/// <param name="query_parameters">URL中的查询参数</param>
+/// <param name="path_parameters">URL中的路径参数</param>
+/// <param name="request_body">请求的Content-Body内容</param>
+/// <param name="dest_endpoint">终端地址</param>
+/// <param name="response_headers">响应包HTTP头</param>
+/// <param name="response_body">响应包HTTP Content内容</param>
+/// <returns>HTTP响应状态码</returns>
+/// <created>solym@sohu.com,2018/8/29</created>
+/// ********************************************************************************
+int us_cms_http_get_search(
+	const std::string& path,
+	const std::multimap< std::string, std::string >& headers,
+	const std::multimap< std::string, std::string >& query_parameters,
+	const std::map< std::string, std::string >& path_parameters,
+	const std::vector<uint8_t>& request_body,
+	const std::string& dest_endpoint,
+	std::multimap< std::string, std::string >& response_headers,
+	std::vector<uint8_t>& response_body)
+{
+	response_headers.insert(std::make_pair(std::string("Content-type"), std::string("text/json")));
+
+	/*解析request_body中的json字符串*/
+	rapidjson::Document jsondoc;
+	jsondoc.Parse((char*)request_body.data(), request_body.size());
+	if (jsondoc.HasParseError() || !jsondoc.IsObject()) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":3,\"msg\":\"json格式不正确\"}"));
+		return 400;
+	}
+	rapidjson::Value::ConstMemberIterator queryiter = jsondoc.FindMember("query");
+	if (queryiter == jsondoc.MemberEnd() || !queryiter->value.IsObject()) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":3,\"msg\":\"json格式不正确\"}"));
+		return 400;
+	}
+
+	/*连接数据库*/
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "";
+	std::string database = "metadata2";
+	std::string tablename = "ngcc_metadata";
+
+	/*初始化mysql*/
+	MYSQL * pMysql = mysql_init(NULL);  /*在程序使用Mysql的最开始必须调用mysql_int()初始化*/
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 200;
+	}
+	/*连接数据库服务器*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 500;
+	}
+
+	/*获取字段映射表*/
+	int metaMapTableSize = 0;
+	const us_cms_metdata_map* pMetaMapTable = us_get_cms_metadata_map_table(&metaMapTableSize);
+	if (pMetaMapTable == nullptr || metaMapTableSize < 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"获取字段映射表失败\"}"));
+		return 200;
+	}
+
+	/*为sql预分配存储空间*/
+	std::string sql;
+	sql.reserve(4096 * 4);
+
+	/*sql语句，获取符合条件的url字段*/
+	sql.append("select `url`");
+	sql.append(" from ").append(tablename).append(" where ");
+
+
+	/*query参数*/
+	const auto& queryobj = queryiter->value.GetObject();
+	/*match参数（精确查询和字符串的正则查询）*/
+	rapidjson::Document::ConstMemberIterator iter = queryobj.FindMember("match");
+	if (iter != queryobj.MemberEnd() && iter->value.IsArray()) {
+		const auto& matchArray = iter->value.GetArray();
+		for (int i = 0; i < matchArray.Size(); ++i) {
+			const rapidjson::Document::ValueType& fieldInfo = matchArray[i];
+			/*获取字段名*/
+			rapidjson::Document::ConstMemberIterator fielditer = fieldInfo.FindMember("field");
+			std::string fieldname;
+			if (fielditer == fieldInfo.MemberEnd() || !fielditer->value.IsString()) { continue; }
+			fieldname.assign(fielditer->value.GetString(), fielditer->value.GetStringLength());
+			/*获取查询模式*/
+			int mode = 0;
+			fielditer = fieldInfo.FindMember("mode");
+			if (fielditer == fieldInfo.MemberEnd() || !fielditer->value.IsUint()) { continue; }
+			mode = fielditer->value.GetUint();
+
+			/*获取匹配串*/
+			std::string pattern;
+			fielditer = fieldInfo.FindMember("pattern");
+			if (fielditer == fieldInfo.MemberEnd()) { continue; }
+			if (fielditer->value.IsString()) /*字符串类型*/
+			{
+				pattern = fielditer->value.GetString();
+			}
+			if (fielditer->value.IsInt64())  /*整数类型*/
+			{
+				int pattern_int = fielditer->value.GetInt64();
+				pattern = std::to_string(pattern_int);
+			}
+			if (fielditer->value.IsDouble())  /*浮点数类型*/
+			{
+				double pattern_db = fielditer->value.GetDouble();
+				pattern = std::to_string(pattern_db);
+			}
+
+			/*检查pattern，field和mode的合法性*/
+			std::string dbfield;
+			bool mode_flg = 0;
+			bool find_field_flg = 0;
+			int i_metatbsize = 0;
+			for (; i_metatbsize < metaMapTableSize; ++i_metatbsize)
+			{
+				/*在字段映射表中查找字段名和查询模式，是否匹配*/
+				if (pMetaMapTable[i_metatbsize].m_custon_field == fieldname)
+				{
+					find_field_flg = 1;
+					dbfield = std::to_string(pMetaMapTable[i_metatbsize].m_db_field);
+					if ((pMetaMapTable[i_metatbsize].m_mode & mode) > 0)
+					{
+						mode_flg = 1;
+						break;
+					}
+				}
+			}
+			if (i_metatbsize >= metaMapTableSize)
+			{
+				/*查询模式不正确*/
+				if (find_field_flg == 1 && mode_flg == 0) {
+					bytes_append(response_body, LITERAL_STRING_U8("{\"status\":4,\"msg\":\""));
+					bytes_append(response_body, fieldname);
+					bytes_append(response_body, LITERAL_STRING_U8(u8"查询模式不正确\"}"));
+					return 400;
+				}
+				/*未找到字段*/
+				else if (find_field_flg == 0) {
+					bytes_append(response_body, LITERAL_STRING_U8(u8"{\"status\":5,\"msg\":\"未找到'"));
+					bytes_append(response_body, fieldname);
+					bytes_append(response_body, LITERAL_STRING_U8(u8"'字段\"}"));
+					return 400;
+				}
+			}
+			if (pattern.empty()) {
+				continue; /*如果匹配串为空，跳过该字段不作查询*/
+			}
+			/*根据不同查询模式填写sql语句*/
+			if (mode == 0x01)	/*用正则表达式查询*/
+			{
+				pattern.push_back(' ');
+				size_t posspc;
+				size_t posbeg = 0;
+				/*正则查询的匹配串以空格分割，处理并写成正则表达式*/
+				std::string regexp;
+				do {
+					posspc = pattern.find_first_of(" ", posbeg);
+					regexp.append(pattern.data(), posbeg, posspc - posbeg).append("|");
+					posbeg = posspc + 1;
+				} while (posspc < pattern.size() - 1);
+				regexp.resize(regexp.size() - 1); /*去掉结尾的 | */
+				sql.append("(`").append(dbfield).append("` regexp '").append(regexp).append("')");
+			}
+			else if (mode == 0x02)	/*字符串精确查询*/
+			{
+				sql.append("(`").append(dbfield).append("` = '").append(pattern).append("')");
+			}
+			else if (mode == 0x04 || mode == 0x10)	/*日期或者数值的精确查询*/
+			{
+				sql.append("(`").append(dbfield).append("` = ").append(pattern).append(")");
+			}
+			else {
+				continue;
+			}
+			sql.append(" and ");
+		}
+	} // end if (queryobj.HasMember("match"))
+
+	  /*range参数 （数值或者日期的范围查询）*/
+	iter = queryobj.FindMember("range");
+	if (queryobj.HasMember("range") && iter->value.IsArray()) {
+		const auto& rangeArray = iter->value.GetArray();
+		for (int i = 0; i < rangeArray.Size(); ++i) {
+			const rapidjson::Document::ValueType& fieldInfo = rangeArray[i];
+
+			/*字段名*/
+			rapidjson::Document::ConstMemberIterator fielditer = fieldInfo.FindMember("field");
+			if (fielditer == fieldInfo.MemberEnd() || !fielditer->value.IsString()) { continue; }
+			std::string fieldname;
+			fieldname.assign(fielditer->value.GetString(), fielditer->value.GetStringLength());
+
+			/*最小值*/
+			std::string min_s;
+			fielditer = fieldInfo.FindMember("min");
+			if (fielditer != fieldInfo.MemberEnd()) {
+				if (fielditer->value.IsInt64())   /*整数类型*/
+				{
+					min_s = std::to_string(fielditer->value.GetInt64());
+				}
+				if (fielditer->value.IsDouble())  /*浮点数类型*/
+				{
+					min_s = std::to_string(fielditer->value.GetDouble());
+				}
+			}
+			/*最大值*/
+			std::string max_s;
+			fielditer = fieldInfo.FindMember("max");
+			if (fielditer != fieldInfo.MemberEnd()) {
+				if (fielditer->value.IsInt64())  /*整数类型*/
+				{
+					max_s = std::to_string(fielditer->value.GetInt64());
+				}
+				if (fielditer->value.IsDouble())  /*浮点数类型*/
+				{
+					max_s = std::to_string(fielditer->value.GetDouble());
+				}
+			}
+			/*如果最大最小值都为空，跳过不查询*/
+			if (min_s.empty() && max_s.empty())
+			{
+				continue;
+			}
+
+			std::string dbfield;
+			bool mode_flg = 0;  /*查询模式 正确为1*/
+			bool find_field_flg = 0;  /*字段是否正确，正确为1*/
+									  /*检查field和mode的合法性*/
+			int i_metatbsize = 0;
+			for (; i_metatbsize < metaMapTableSize; ++i_metatbsize)
+			{
+				/*在字段映射表中查找字段名和查询模式，是否匹配*/
+				if (pMetaMapTable[i_metatbsize].m_custon_field == fieldname)
+				{
+					find_field_flg = 1;
+					dbfield = std::to_string(pMetaMapTable[i_metatbsize].m_db_field);
+					if ((pMetaMapTable[i_metatbsize].m_mode & 0x08) > 0 ||
+						(pMetaMapTable[i_metatbsize].m_mode & 0x20) > 0)  /*0x08 是日期的范围搜索 0x20是数值的范围搜索*/
+					{
+						mode_flg = 1;
+						break;
+					}
+				}
+			}
+			if (i_metatbsize >= metaMapTableSize)
+			{
+				/*查询模式不正确*/
+				if (find_field_flg == 1 && mode_flg == 0) {
+					std::string rntStr = "{\"status\":6,\"msg\":\"";
+					bytes_append(response_body, fieldname);
+					bytes_append(response_body, LITERAL_STRING_U8(u8"无法进行范围查询\"}"));
+					return 400;
+				}
+				/*未找到字段*/
+				else if (find_field_flg == 0) {
+					std::string rntStr = u8"{\"status\":7,\"msg\":\"未找到'";
+					bytes_append(response_body, fieldname);
+					bytes_append(response_body, LITERAL_STRING_U8(u8"'字段\"}"));
+					return 400;
+				}
+			}
+			/*只有最大值的情况*/
+			if (min_s.empty() && !max_s.empty()) {
+				sql.append("(`").append(dbfield).append("` <= ").append(max_s).append(")");
+				sql.append(" and ");
+			}
+			/*只有最小值的情况*/
+			else if (!min_s.empty() && max_s.empty()) {
+				sql.append("(`").append(dbfield).append("` >= ").append(min_s).append(")");
+				sql.append(" and ");
+			}
+			/*最大最小值都存在*/
+			else if (!min_s.empty() && !max_s.empty()) {
+				sql.append("(`").append(dbfield).append("` between ").append(min_s).append(" and ").append(max_s).append(")");
+				sql.append(" and ");
+			}
+		}
+	} // end if (queryobj.HasMember("range"))
+
+	  /*geometry参数 （地理范围的查询[x,y,x,y,x,y...]）*/
+	  //使用迭代器查找geometry参数
+	iter = queryobj.FindMember("geometry");
+	if (iter != queryobj.MemberEnd() && iter->value.IsArray()) {
+		const auto& polyArray = iter->value.GetArray();
+		std::vector<double> boxArray;
+		boxArray.reserve(polyArray.Size() * 4);
+		// 逐个获取polygon
+		for (size_t i = 0; i < polyArray.Size(); ++i) {
+			// "POLYGON((x1 y1,x2 y2,…,xn yn)）,(x1 y1,x2 y2,…,xm ym),......)"
+			const auto& polyStr = polyArray[i];
+			if (!polyStr.IsString()) { continue; }
+			// 方法一
+			const geos::geom::GeometryFactory* pFactory = geos::geom::GeometryFactory::getDefaultInstance();
+			geos::io::WKTReader wktreader(pFactory);
+			geos::geom::Geometry* pPoly =
+				wktreader.read(std::string(polyStr.GetString(), polyStr.GetStringLength()));
+			if (pPoly == NULL) { continue; }
+			const geos::geom::Envelope* pBox = pPoly->getEnvelopeInternal();
+			if (pBox == NULL) { pFactory->destroyGeometry(pPoly); continue; }
+			boxArray.push_back(pBox->getMinX());
+			boxArray.push_back(pBox->getMinY());
+			boxArray.push_back(pBox->getMaxX());
+			boxArray.push_back(pBox->getMaxY());
+			pFactory->destroyGeometry(pPoly);
+			// 方法二
+		}
+
+		/*获取数据库中的字段名*/
+		std::string dbfiled_max_x, dbfiled_min_x, dbfiled_max_y, dbfiled_min_y;
+		for (int i = 0; i < metaMapTableSize; ++i) {
+			if (pMetaMapTable[i].m_custon_field == "MaxX") {
+				dbfiled_max_x = std::to_string(pMetaMapTable[i].m_db_field);
+			}
+			if (pMetaMapTable[i].m_custon_field == "MinX") {
+				dbfiled_min_x = std::to_string(pMetaMapTable[i].m_db_field);
+			}
+			if (pMetaMapTable[i].m_custon_field == "MaxY") {
+				dbfiled_max_y = std::to_string(pMetaMapTable[i].m_db_field);
+			}
+			if (pMetaMapTable[i].m_custon_field == "MinY") {
+				dbfiled_min_y = std::to_string(pMetaMapTable[i].m_db_field);
+			}
+		}
+		std::string x_min_s, y_min_s, x_max_s, y_max_s;
+		for (size_t i = 0; i < boxArray.size(); i += 4) {
+			/*填写sql查询语句*/
+			x_min_s = std::to_string(boxArray[i]);
+			y_min_s = std::to_string(boxArray[i + 1]);
+			x_max_s = std::to_string(boxArray[i + 2]);
+			y_max_s = std::to_string(boxArray[i + 3]);
+
+			/*填写sql查询语句*/
+			sql.append("(not(").append(x_max_s).append(" <= `").append(dbfiled_min_x).append("` or ");
+			sql.append(x_min_s).append(" >= `").append(dbfiled_max_x).append("` or ");
+			sql.append(y_max_s).append(" <= `").append(dbfiled_min_y).append("` or ");
+			sql.append(y_min_s).append(" >= `").append(dbfiled_max_y).append("`)) and ");
+		}
+	}
+
+	/*对sql语句结尾部分处理*/
+	size_t posand = sql.rfind("and");
+	if (posand == sql.size() - 4) {
+		sql.resize(sql.size() - 4); //去掉结尾的and
+	}
+	else {
+		sql.resize(sql.size() - 6); //去掉结尾的where
+	}
+
+	/*size参数，获取几条记录*/
+	if (jsondoc.HasMember("size") && jsondoc["size"].IsInt64()) {
+		int size = jsondoc["size"].GetInt64();
+		sql.append(" limit ").append(std::to_string(size));
+	}
+
+	/*from参数，从第几条记录开始获取*/
+	if (jsondoc.HasMember("from") && jsondoc["from"].IsInt64()) {
+		int from = jsondoc["from"].GetInt64();
+		sql.append(" offset ").append(std::to_string(from));
+	}
+
+	std::cout << sql << std::endl;
+
+	/*执行sql查询，并返回查询结果*/
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":9,\"msg\":\"执行sql查询失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+
+	MYSQL_RES *result = mysql_store_result(pMysql);
+	if (result == NULL) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":10,\"msg\":\"获取sql查询结果失败\"}"));
+		return 200;
+	}
+
+	/*返回了多少行*/
+	unsigned long long rows = mysql_num_rows(result);
+	if (rows < 1) {
+		mysql_free_result(result);
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":11,\"url\":[]}"));
+		return 200;
+	}
+
+	rapidjson::StringBuffer strbuf;
+	strbuf.Reserve(rows * 2048);
+	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+	/*将获取到的结果写入json*/
+	writer.StartObject();
+	writer.Key("status");
+	writer.Int(0);
+	writer.Key("urls");
+	writer.StartArray();
+
+	MYSQL_ROW rown;
+	unsigned long* row_len = NULL;
+	while ((rown = mysql_fetch_row(result)) != NULL &&
+		(row_len = mysql_fetch_lengths(result)) != NULL) {
+		for (int i = 0; i < mysql_num_fields(result); ++i)  //只有一个字段url
+		{
+			std::string rows_s = std::string(rown[i], row_len[i]);
+			writer.String(rows_s.c_str());
+		}
+	}
+	writer.EndArray();
+	writer.EndObject();
+
+	bytes_append(response_body, (uint8_t*)strbuf.GetString(), strbuf.GetSize());
+
+	mysql_free_result(result);
+
+	if (pMysql)
+	{
+		mysql_close(pMysql);
+	}
+
+	return 200;
+}
+
+
+
+
+/// ********************************************************************************
+/// <summary>
+/// 获取用户元数据
+/// </summary>
+/// <param name="path">HTTP GET请求路径</param>
+/// <param name="headers">HTTP请求包头</param>
+/// <param name="query_parameters">URL中的查询参数</param>
+/// <param name="path_parameters">URL中的路径参数</param>
+/// <param name="request_body">请求的Content-Body内容</param>
+/// <param name="dest_endpoint">终端地址</param>
+/// <param name="response_headers">响应包HTTP头</param>
+/// <param name="response_body">响应包HTTP Content内容</param>
+/// <returns>HTTP响应状态码</returns>
+/// <created>solym@sohu.com,2018/8/29</created>
+/// ********************************************************************************
+int us_cms_http_get_getm(
+	const std::string& path,
+	const std::multimap< std::string, std::string >& headers,
+	const std::multimap< std::string, std::string >& query_parameters,
+	const std::map< std::string, std::string >& path_parameters,
+	const std::vector<uint8_t>& request_body,
+	const std::string& dest_endpoint,
+	std::multimap< std::string, std::string >& response_headers,
+	std::vector<uint8_t>& response_body)
+{
+	response_headers.insert(std::make_pair(std::string("Content-type"), std::string("text/json")));
+
+	/*读取请求实体*/
+	rapidjson::Document jsondoc;
+	jsondoc.Parse((char*)request_body.data(), request_body.size());
+	if (jsondoc.HasParseError() || !jsondoc.IsObject()) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":3,\"msg\":\"json格式不正确\"}"));
+		return 400;
+	}
+
+	/*从请求实体中获取url参数*/
+	std::vector<std::string> vect_urls;
+	rapidjson::Value::ConstMemberIterator iter = jsondoc.FindMember("urls");
+	if (iter != jsondoc.MemberEnd() && iter->value.IsArray())
+	{
+		const auto &urls = iter->value.GetArray();
+		for (auto itr_urls = urls.Begin(); itr_urls != urls.End(); ++itr_urls)
+		{
+			if (itr_urls->IsString())
+			{
+				vect_urls.push_back(std::string(itr_urls->GetString(), itr_urls->GetStringLength()));
+			}
+		}
+	}
+
+	if (vect_urls.empty())
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"无法从请求实体中获取到_id或者url\"}"));
+		return 400;
+	}
+
+
+	/*连接数据库*/
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "";
+	std::string database = "metadata2";
+	std::string tablename = "ngcc_metadata";
+
+	/*初始化mysql*/
+	MYSQL * pMysql = mysql_init(NULL);  /*在程序使用Mysql的最开始必须调用mysql_int()初始化*/
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 200;
+	}
+	/*连接数据库服务器*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 500;
+	}
+
+	/*获取字段映射表*/
+	int metaMapTableSize = 0;
+	const us_cms_metdata_map *pMetaMapTable = us_get_cms_metadata_map_table(&metaMapTableSize);
+	if (pMetaMapTable == nullptr || metaMapTableSize < 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":4,\"msg\":\"获取字段映射表失败\"}"));
+		return 200;
+	}
+
+	std::vector<us_cms_metdata_map> metamaps;
+	metamaps.reserve(metaMapTableSize + 1);
+	/*metamaps.push_back({ "_id", 0, 1, 0 });*/
+	metamaps.push_back({ "url", 0, 1, 0 });
+	for (int i = 0; i < metaMapTableSize; ++i)
+	{
+		metamaps.push_back(pMetaMapTable[i]);
+	}
+
+	/*sql语句*/
+	std::string sql;
+	size_t size_sql = 100 + metaMapTableSize * 10 + vect_urls.size() * 1024;
+	sql.reserve(size_sql); /*为sql预分配存储空间*/
+
+	sql.append("select ");
+	for (int i = 0; i < metamaps.size(); ++i)
+	{
+		const us_cms_metdata_map &field_metamap = metamaps[i];
+
+		if (i == 0) //url
+		{
+			sql.append("url, ");
+		}
+		else if (field_metamap.m_custon_field == "ImgRange")
+		{
+			std::string i_str = std::to_string(field_metamap.m_db_field);
+			sql.append("ST_AsText(`").append(i_str).append("`) as `").append(i_str).append("`, ");
+		}
+		else
+		{
+			std::string i_str = std::to_string(field_metamap.m_db_field);
+			sql.append("`").append(i_str).append("`, ");
+		}
+	}
+	sql = sql.substr(0, sql.size() - 2);
+	sql.append(" from ").append(tablename);
+
+	sql.append(" where ");
+
+	if (!vect_urls.empty())
+	{
+		for (auto itr = vect_urls.begin(); itr != vect_urls.end(); ++itr)
+		{
+			if (itr->empty())
+			{
+				continue; /*如果空值就跳过，不查询*/
+			}
+			char buf_url[1534];
+			int ret = mysql_real_escape_string(pMysql, buf_url, itr->c_str(), itr->size());
+			std::string fd_url_str = std::string(buf_url, ret);
+			sql.append("`url` = '").append(fd_url_str).append("' or ");
+		}
+	}
+	sql.resize(sql.size() - 4); /*去掉结尾的or*/
+
+	/*执行sql查询，并返回查询结果*/
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":5,\"msg\":\"实行sql查询失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+	MYSQL_RES *result = mysql_store_result(pMysql);
+	if (result == NULL)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"获取sql查询结果失败\"}"));
+		return 200;
+	}
+
+	/*返回了多少行*/
+	unsigned long long rows = mysql_num_rows(result);
+	std::string rowstr = std::to_string(rows);
+	if (rows < 1)
+	{
+		mysql_free_result(result);
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":7,\"msg\":\"未找到对应的记录\"}"));
+		return 200;
+	}
+
+	/*查询到的结果*/
+	rapidjson::StringBuffer strbuf;
+	strbuf.Reserve(rows * 5120);
+	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+	/*将获取到的结果写入json*/
+	writer.StartObject();
+
+	/*状态值为0*/
+	writer.Key("status");
+	writer.Int64(0);
+
+	/*成功的数目*/
+	writer.Key("okn");
+	writer.Int64(rows);
+
+	/*返回成功的元数据记录*/
+	writer.Key("metas");
+	writer.StartArray();  /*数组形式*/
+
+	MYSQL_ROW rown; /*一行数据的类型安全表示*/
+	unsigned long* row_lens = NULL;
+	while ((rown = mysql_fetch_row(result)) != NULL &&
+		(row_lens = mysql_fetch_lengths(result)) != NULL)
+	{
+		writer.StartObject();
+
+		for (int i = 0; i < mysql_num_fields(result); ++i)
+		{
+			std::string strFd = std::string(rown[i], row_lens[i]);  /*获取字段值*/
+
+			std::string fd_name = metamaps[i].m_custon_field;  /*用户可见的字段名*/
+			uint32_t fd_type = metamaps[i].m_type;  /*字段类型*/
+
+			if (i == 0) /* url*/
+			{
+				std::vector<std::string>::iterator itr
+					= std::find(vect_urls.begin(), vect_urls.end(), strFd); /*查找url*/
+				if (itr != vect_urls.end())
+				{
+					itr->assign(""); /*set_urls存放失败的url*/
+				}
+				else
+				{
+					//用户输入的url中没有fd_s(比如编码的问题导致)跳过  
+					break;
+				}
+			}
+
+			/*外包框跳过*/
+			if (fd_name == "MaxX" || fd_name == "MinX" || fd_name == "MaxY" || fd_name == "MinY")
+			{
+				continue;
+			}
+
+			/*整数数值类型存储的字段*/
+			else if (fd_type == 2)
+			{
+				writer.Key(fd_name.c_str());
+				writer.Int64(atoi(strFd.c_str()));
+			}
+
+			/*浮点数数值类型存储的字段*/
+			else if (fd_type == 3)
+			{
+				writer.Key(fd_name.c_str());
+				writer.Double(atof(strFd.c_str()));
+			}
+
+			/*按字符串类型存储的字段*/
+			else
+			{
+				writer.Key(fd_name.c_str());
+				writer.String(strFd.c_str());
+			}
+		}
+		writer.EndObject();
+	} // end while (mysql_fetch_row(result))
+	writer.EndArray();
+
+	/*查询失败的部分*/
+	int failn = 0;
+
+	/*查询失败的id*/
+	writer.Key("fails");
+	writer.StartObject();
+
+	/*查询失败的url*/
+	writer.Key("urls");
+	writer.StartArray();
+	int failed_urln = 0;
+	for (auto itr = vect_urls.begin(); itr != vect_urls.end(); ++itr)
+	{
+		if (!itr->empty())
+		{
+			writer.String(itr->c_str(), itr->size());
+			failed_urln++;
+		}
+	}
+	writer.EndArray();
+	writer.EndObject();
+
+	/*查询失败的数目*/
+	writer.Key("failn");
+	writer.Int64(/*failed_idn +*/ failed_urln);
+
+	writer.EndObject();
+
+	bytes_append(response_body, (uint8_t*)strbuf.GetString(), strbuf.GetSize());
+
+	mysql_free_result(result);
+
+	if (pMysql != NULL)
+	{
+		mysql_close(pMysql);
+	}
+
+	return 200;
+}
+
+
+
+/// ********************************************************************************
+/// <summary>
+/// 重建用户元数据存储
+/// </summary>
+/// <param name="path">HTTP GET请求路径</param>
+/// <param name="headers">HTTP请求包头</param>
+/// <param name="query_parameters">URL中的查询参数</param>
+/// <param name="path_parameters">URL中的路径参数</param>
+/// <param name="request_body">请求的Content-Body内容</param>
+/// <param name="dest_endpoint">终端地址</param>
+/// <param name="response_headers">响应包HTTP头</param>
+/// <param name="response_body">响应包HTTP Content内容</param>
+/// <returns>HTTP响应状态码</returns>
+/// <created>solym@sohu.com,2018/8/29</created>
+/// ********************************************************************************
+int us_cms_http_post_rebuild22(
+	const std::string& path,
+	const std::multimap< std::string, std::string >& headers,
+	const std::multimap< std::string, std::string >& query_parameters,
+	const std::map< std::string, std::string >& path_parameters,
+	const std::vector<uint8_t>& request_body,
+	const std::string& dest_endpoint,
+	std::multimap< std::string, std::string >& response_headers,
+	std::vector<uint8_t>& response_body)
+{
+	response_headers.insert(std::make_pair(std::string("Content-type"), std::string("text/json")));
+
+	/*unispace::us_data_storage_manager& r_storage_mgr =
+		unispace::us_data_storage_manager::get_instance();*/
+
+	/*连接数据库*/
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "";
+	std::string database = "metadata2";
+	std::string tablename = "ngcc_metadata";
+
+	/*初始化mysql*/
+	MYSQL * pMysql = mysql_init(NULL);  /*在程序使用Mysql的最开始必须调用mysql_int()初始化*/
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 200;
+	}
+	/*连接数据库服务器*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 500;
+	}
+
+	/*获取字段映射表*/
+	int metaMapTableSize = 0;
+	const us_cms_metdata_map *pMetaMapTable = us_get_cms_metadata_map_table(&metaMapTableSize);
+	if (pMetaMapTable == nullptr || metaMapTableSize < 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"获取字段映射表失败\"}"));
+		return 200;
+	}
+
+	/*清空元数据存储表*/
+	std::string sql_clear = "truncate table " + tablename;
+	if (mysql_real_query(pMysql, sql_clear.c_str(), sql_clear.size()) != 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":3,\"msg\":\"清空元数据查记录表失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+
+	/*读取image元数据表中的全部记录，重建用户元数据的存储记录*/
+	std::string sql_read = "select _id, url from image";
+	if (mysql_real_query(pMysql, sql_read.c_str(), sql_read.size()) != 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":4,\"msg\":\"读取image表失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+	MYSQL_RES *result = mysql_store_result(pMysql);
+	if (result == NULL)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":5,\"msg\":\"获取sql查询结果失败\"}"));
+		return 200;
+	}
+
+	/*返回的记录数目，如果小于1，则image元数据表为空，不能重建*/
+	unsigned long long rows = mysql_num_rows(result);
+	if (rows < 1)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"image 元数据表为空\"}"));
+		mysql_free_result(result);
+		return 200;
+	}
+
+	/*mysql预处理sql语句*/
+	std::string sql_insert;
+	sql_insert.reserve(8192);
+	sql_insert.append("insert into ").append(tablename).append("(`_id`, `url`, `status`, ");
+	for (int i = 0; i < metaMapTableSize; i++)
+	{
+		std::string buf_i = std::to_string(pMetaMapTable[i].m_db_field);
+		sql_insert.append("`").append(buf_i).append("`, ");
+	}
+	sql_insert.resize(sql_insert.size() - 2); /*去掉结尾的‘, ’*/
+	sql_insert.append(") values(?, ?, 0, ");   /*重建时status置为0*/  /*sql语句，?为预处理参数*/
+	for (int i = 0; i < metaMapTableSize; i++)
+	{
+		sql_insert.append("?, ");
+	}
+	sql_insert.resize(sql_insert.size() - 2);
+	sql_insert.append(")");
+
+	//初始化预处理器
+	MYSQL_STMT* pMysqlStmt = mysql_stmt_init(pMysql);
+	if (!pMysqlStmt)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"mysql预处理器初始化失败\"}"));
+		return 200;
+	}
+	//将sql语句插入
+	if (mysql_stmt_prepare(pMysqlStmt, sql_insert.c_str(), sql_insert.size()))
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"mysql预处理语句插入失败\"}"));
+		return 200;
+	}
+	// ?（预处理参数） 的个数
+	unsigned long paramCount = mysql_stmt_param_count(pMysqlStmt);
+	if (paramCount != 76)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"mysql预处理参数个数有误\"}"));
+		return 200;
+	}
+	MYSQL_BIND* paramBind = new MYSQL_BIND[paramCount];
+	if (!paramBind)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"mysql预处理参数缓存区创建失败\"}"));
+		return 200;
+	}
+	memset(paramBind, 0, paramCount * sizeof(MYSQL_BIND));
+
+	MYSQL_ROW rown;
+	unsigned long *row_len;
+	std::vector<std::string> fail_urls;
+	while ((rown = mysql_fetch_row(result)) != NULL &&
+		(row_len = mysql_fetch_lengths(result)) != NULL)
+	{
+		std::string image_id(rown[0], row_len[0]);  /*获取_id*/
+		std::string image_url(rown[1], row_len[1]);   /*获取url*/
+
+		//设置预处理参数id
+		paramBind[0].buffer_type = MYSQL_TYPE_STRING;
+		paramBind[0].buffer = (void*)(image_id.c_str());
+		paramBind[0].buffer_length = image_id.size();
+
+		//设置预处理参数url
+		paramBind[1].buffer_type = MYSQL_TYPE_STRING;
+		paramBind[1].buffer = (void*)(image_url.c_str());
+		paramBind[1].buffer_length = image_url.size();
+
+		//根据image中的url读取元数据记录，以json格式存放在out_json
+		std::string out_json;
+		int ret_read = us_read_cms_metadata_record(image_url, &out_json);
+		if (ret_read < 0) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+		rapidjson::Document doc1;
+		doc1.Parse(out_json.c_str());
+		if (doc1.HasParseError()) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+
+		int intValue[15];
+		double dbValue[20];
+		int i_intvalue = 0;
+		int j_dbvalue = 0;
+		for (int i = 0; i < metaMapTableSize; ++i)
+		{
+			std::string colname = std::to_string(pMetaMapTable[i].m_db_field);
+			rapidjson::Value::MemberIterator itr = doc1.FindMember(colname.c_str());
+			if (itr == doc1.MemberEnd())
+			{
+				fail_urls.push_back(image_url);
+				break;
+			}
+
+			std::string strValue = "";
+			if (pMetaMapTable[i].m_custon_field == "ImgRange") {
+				strValue = doc1[colname.c_str()].GetString();
+				strValue = "ST_GeomFromText('Polygon" + strValue + "')";
+
+				paramBind[i + 2].buffer_type = MYSQL_TYPE_STRING;
+				paramBind[i + 2].buffer = (void*)(strValue.c_str());
+				paramBind[i + 2].buffer_length = strValue.size();
+			}
+			/*只有这三种类型*/
+			else if (doc1[colname.c_str()].IsInt64())
+			{
+				intValue[i_intvalue] = doc1[colname.c_str()].GetInt64();
+				paramBind[i + 2].buffer_type = MYSQL_TYPE_LONG;
+				paramBind[i + 2].buffer = &intValue[i_intvalue++];
+			}
+			else if (doc1[colname.c_str()].IsDouble())
+			{
+				dbValue[j_dbvalue] = doc1[colname.c_str()].GetDouble();
+				paramBind[i + 2].buffer_type = MYSQL_TYPE_DOUBLE;
+				paramBind[i + 2].buffer = &dbValue[j_dbvalue++];
+			}
+			else if (doc1[colname.c_str()].IsString())
+			{
+				paramBind[i + 2].buffer_type = MYSQL_TYPE_STRING;
+				paramBind[i + 2].buffer = (void*)(doc1[colname.c_str()].GetString());
+				paramBind[i + 2].buffer_length = doc1[colname.c_str()].GetStringLength();
+			}
+		}
+		if (mysql_stmt_bind_param(pMysqlStmt, paramBind)) /*绑定预处理参数*/
+		{
+			bytes_append(response_body,
+				LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"mysql_stmt_bind_param failed\"}"));
+			bytes_append(response_body, mysql_stmt_error(pMysqlStmt));
+			return 200;
+		}
+		if (mysql_stmt_execute(pMysqlStmt)) /*将绑定的预处理参数值发送到服务器，服务器使用新提供的数据替换标记*/
+		{
+			bytes_append(response_body,
+				LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"mysql_stmt执行失败\"}"));
+			bytes_append(response_body, mysql_stmt_error(pMysqlStmt));
+			return 200;
+		}
+	}  // end while
+
+	//if (0 == mysql_stmt_affected_rows(pMysqlStmt))  /*增删改 发生改变的行数*/
+	//{
+	//	bytes_append(response_body,
+	//		LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"没有发生改变的记录\"}"));
+	//	return 200;
+	//}
+
+
+	//MYSQL_ROW rown; /*一行数据的类型安全表示*/
+	//std::vector<std::string> fail_urls;
+	//unsigned long *row_len;
+	//while ((rown = mysql_fetch_row(result)) != NULL &&
+	//	(row_len = mysql_fetch_lengths(result)) != NULL) {
+
+	//	std::string image_id(rown[0], row_len[0]);  /*获取_id*/
+	//	std::string image_url(rown[1], row_len[1]);   /*获取url*/
+
+	//	// 获取实际文件路径
+	//	/*unispace::us_ustring realpath = r_storage_mgr.get_image_real_path(image_url);*/
+	//	
+	//	//根据image中的url读取元数据记录，以json格式存放在out_json
+	//	std::string out_json;
+	//	int ret_read = us_read_cms_metadata_record(image_url, &out_json);
+	//	if (ret_read < 0) {
+	//		fail_urls.push_back(image_url);
+	//		continue;
+	//	}
+	//	rapidjson::Document doc1;
+	//	doc1.Parse(out_json.c_str());
+	//	if (doc1.HasParseError()) {
+	//		fail_urls.push_back(image_url);
+	//		continue;
+	//	}
+
+	//	/*插入数据（将id，url，status（插入元数据则它记为0），元数据全部插入）*/
+	//	std::string sql_insert;
+	//	sql_insert.reserve(8192);
+	//	sql_insert = "insert into " + tablename + "(`_id`, `url`, `status`, ";
+	//	for (int i = 0; i < metaMapTableSize; i++)
+	//	{
+	//		std::string buf_i = std::to_string(pMetaMapTable[i].m_db_field);
+	//		sql_insert.append("`").append(buf_i).append("`, ");
+	//	}
+	//	sql_insert.resize(sql_insert.size() - 2);
+	//	sql_insert.append(") values('").append(image_id).append("', '").append(image_url)
+	//		.append("', ").append("0, ");   /*重建时status置为0*/
+
+	//	for (int i = 0; i < metaMapTableSize; i++)
+	//	{
+	//		std::string colname = std::to_string(pMetaMapTable[i].m_db_field);
+
+	//		std::string value_db = "";
+	//		if (doc1.HasMember(colname.c_str()))
+	//		{
+	//			if (!doc1[colname.c_str()].IsNull())
+	//			{
+	//				if (pMetaMapTable[i].m_custon_field == "ImgRange") {
+	//					value_db = doc1[colname.c_str()].GetString();
+	//					value_db = "ST_GeomFromText('Polygon" + value_db + "')";
+	//					sql_insert.append(value_db).append(", ");
+	//				}
+	//				/*只有这三种类型*/
+	//				else if (doc1[colname.c_str()].IsInt64())
+	//				{
+	//					int colv = doc1[colname.c_str()].GetInt64();
+	//					value_db = std::to_string(colv);
+	//					sql_insert.append(value_db).append(", ");
+	//				}
+	//				else if (doc1[colname.c_str()].IsDouble())
+	//				{
+	//					double colv = doc1[colname.c_str()].GetDouble();
+	//					value_db = std::to_string(colv);
+	//					sql_insert.append(value_db).append(", ");
+	//				}
+	//				else if (doc1[colname.c_str()].IsString())
+	//				{
+	//					value_db.assign(doc1[colname.c_str()].GetString(), 
+	//						doc1[colname.c_str()].GetStringLength());
+	//					sql_insert.append("'").append(value_db).append("', ");
+	//				}
+	//			}
+	//		}
+	//		else
+	//		{
+	//			fail_urls.push_back(image_url);
+	//			break;
+	//		}
+	//	}  //end for
+
+	//	sql_insert.resize(sql_insert.size() - 2);  /*去掉结尾的', '*/
+	//	sql_insert.append(")");
+	//	if (mysql_real_query(pMysql, sql_insert.data(), sql_insert.size()) != 0)
+	//	{
+	//		fail_urls.push_back(image_url);
+	//		continue;
+	//	}
+	//}  // end while
+
+	//mysql_free_result(result);
+
+	bytes_append(response_body,
+		LITERAL_STRING_U8(u8"{\"status\":0,\"fails\":[\""));
+	for (size_t i = 0; i < fail_urls.size(); ++i) {
+		bytes_append(response_body, fail_urls[i]);
+		bytes_append(response_body, "\",\"");
+	}
+	if (!fail_urls.empty()) { response_body.pop_back(); }
+	response_body.pop_back();
+
+	bytes_append(response_body, "]}");
+
+	return 200;
+}
+
+
+int us_cms_http_post_rebuild(
+	const std::string& path,
+	const std::multimap< std::string, std::string >& headers,
+	const std::multimap< std::string, std::string >& query_parameters,
+	const std::map< std::string, std::string >& path_parameters,
+	const std::vector<uint8_t>& request_body,
+	const std::string& dest_endpoint,
+	std::multimap< std::string, std::string >& response_headers,
+	std::vector<uint8_t>& response_body)
+{
+	response_headers.insert(std::make_pair(std::string("Content-type"), std::string("text/json")));
+
+	/*unispace::us_data_storage_manager& r_storage_mgr =
+		unispace::us_data_storage_manager::get_instance();*/
+
+	/*连接数据库*/
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "";
+	std::string database = "metadata2";
+	std::string tablename = "ngcc_metadata";
+
+	/*初始化mysql*/
+	MYSQL * pMysql = mysql_init(NULL);  /*在程序使用Mysql的最开始必须调用mysql_int()初始化*/
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 200;
+	}
+	/*连接数据库服务器*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 500;
+	}
+
+	/*获取字段映射表*/
+	int metaMapTableSize = 0;
+	const us_cms_metdata_map *pMetaMapTable = us_get_cms_metadata_map_table(&metaMapTableSize);
+	if (pMetaMapTable == nullptr || metaMapTableSize < 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"获取字段映射表失败\"}"));
+		return 200;
+	}
+
+	/*清空元数据存储表*/
+	std::string sql_clear = "truncate table " + tablename;
+	if (mysql_real_query(pMysql, sql_clear.c_str(), sql_clear.size()) != 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":3,\"msg\":\"清空元数据查记录表失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+
+	/*读取image元数据表中的全部记录，重建用户元数据的存储记录*/
+	std::string sql_read = "select _id, url from image";
+	if (mysql_real_query(pMysql, sql_read.c_str(), sql_read.size()) != 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":4,\"msg\":\"读取image表失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+	MYSQL_RES *result = mysql_store_result(pMysql);
+	if (result == NULL)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":5,\"msg\":\"获取sql查询结果失败\"}"));
+		return 200;
+	}
+
+	/*返回的记录数目，如果小于1，则image元数据表为空，不能重建*/
+	unsigned long long rows = mysql_num_rows(result);
+	if (rows < 1)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"image 元数据表为空\"}"));
+		mysql_free_result(result);
+		return 200;
+	}
+	MYSQL_ROW rown; //一行数据的类型安全表示
+	std::vector<std::string> fail_urls;
+	unsigned long *row_len;
+	while ((rown = mysql_fetch_row(result)) != NULL &&
+		(row_len = mysql_fetch_lengths(result)) != NULL) {
+		std::string out_json;
+
+		std::string image_id(rown[0], row_len[0]);  //获取_id
+		std::string image_url(rown[1], row_len[1]);   //获取url
+
+													  // 获取实际文件路径
+		/*unispace::us_ustring realpath = r_storage_mgr.get_image_real_path(image_url);*/
+		//根据image中的url读取元数据记录，以json格式存放在out_json
+		int ret_read = us_read_cms_metadata_record(image_url, &out_json);
+		if (ret_read < 0) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+		rapidjson::Document doc1;
+		doc1.Parse(out_json.c_str());
+		if (doc1.HasParseError()) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+
+		/*插入数据（将id，url，status（插入元数据则它记为0），元数据全部插入）*/
+		std::string sql_insert;
+		sql_insert.reserve(8192);
+		sql_insert = "insert into " + tablename + "(`_id`, `url`, `status`, ";
+		for (int i = 0; i < metaMapTableSize; i++)
+		{
+			std::string buf_i = std::to_string(pMetaMapTable[i].m_db_field);
+			sql_insert.append("`").append(buf_i).append("`, ");
+		}
+		sql_insert = sql_insert.substr(0, sql_insert.size() - 2);
+		sql_insert.append(") values('").append(image_id).append("', '").append(image_url)
+			.append("', ").append("0, ");   //重建时status置为0
+
+		for (int i = 0; i < metaMapTableSize; i++)
+		{
+			std::string colname = std::to_string(pMetaMapTable[i].m_db_field);
+
+			std::string value_db = "";
+			if (doc1.HasMember(colname.c_str()))
+			{
+				if (!doc1[colname.c_str()].IsNull())
+				{
+					if (pMetaMapTable[i].m_custon_field == "ImgRange") {
+						value_db = doc1[colname.c_str()].GetString();
+						value_db = "ST_GeomFromText('Polygon" + value_db + "')";
+						sql_insert.append(value_db).append(", ");
+					}
+					/*只有这三种类型*/
+					else if (doc1[colname.c_str()].IsInt64())
+					{
+						int colv = doc1[colname.c_str()].GetInt64();
+						value_db = std::to_string(colv);
+						sql_insert.append(value_db).append(", ");
+					}
+					else if (doc1[colname.c_str()].IsDouble())
+					{
+						double colv = doc1[colname.c_str()].GetDouble();
+						value_db = std::to_string(colv);
+						sql_insert.append(value_db).append(", ");
+					}
+					else if (doc1[colname.c_str()].IsString())
+					{
+						value_db = doc1[colname.c_str()].GetString();
+						sql_insert.append("'").append(value_db).append("', ");
+					}
+				}
+			}
+			else
+			{
+				fail_urls.push_back(image_url);
+				continue;
+			}
+		}
+
+		sql_insert = sql_insert.substr(0, sql_insert.size() - 2);
+		sql_insert.append(")");
+		if (mysql_real_query(pMysql, sql_insert.data(), sql_insert.size()) != 0)
+		{
+			fail_urls.push_back(image_url);
+			continue;
+		}
+	}  // end while
+
+	mysql_free_result(result);
+
+	bytes_append(response_body,
+		LITERAL_STRING_U8(u8"{\"status\":0,\"fails\":[\""));
+	for (size_t i = 0; i < fail_urls.size(); ++i) {
+		bytes_append(response_body, fail_urls[i]);
+		bytes_append(response_body, "\",\"");
+	}
+	if (!fail_urls.empty()) { response_body.pop_back(); }
+	response_body.pop_back();
+
+	bytes_append(response_body, "]}");
+
+	if (pMysql)
+	{
+		mysql_close(pMysql);
+	}
+
+	return 200;
+}
+
+
+int us_cms_http_post_refresh(
+	const std::string& path,
+	const std::multimap< std::string, std::string >& headers,
+	const std::multimap< std::string, std::string >& query_parameters,
+	const std::map< std::string, std::string >& path_parameters,
+	const std::vector<uint8_t>& request_body,
+	const std::string& dest_endpoint,
+	std::multimap< std::string, std::string >& response_headers,
+	std::vector<uint8_t>& response_body)
+{
+	response_headers.insert(std::make_pair(std::string("Content-type"), std::string("text/json")));
+
+	unispace::us_data_storage_manager& r_storage_mgr =
+		unispace::us_data_storage_manager::get_instance();
+
+	/*连接数据库*/
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "";
+	std::string database = "metadata2";
+	std::string tablename = "ngcc_metadata";
+
+	/*初始化mysql*/
+	MYSQL * pMysql = mysql_init(NULL);  /*在程序使用Mysql的最开始必须调用mysql_int()初始化*/
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 200;
+	}
+	/*连接数据库服务器*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 500;
+	}
+
+	/*获取字段映射表*/
+	int metaMapTableSize = 0;
+	const us_cms_metdata_map *pMetaMapTable = us_get_cms_metadata_map_table(&metaMapTableSize);
+	if (pMetaMapTable == NULL || metaMapTableSize < 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"获取字段映射表失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+
+	/*查找status为1对应的url*/
+	std::string sql_search_status = "select _id, url from " + tablename + " where status = 1";
+	if (mysql_real_query(pMysql, sql_search_status.c_str(), sql_search_status.size()) != 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"执行sql查询失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+
+	/*获取url并读取内容插入元数据记录表*/
+	MYSQL_RES *result = mysql_store_result(pMysql);
+	if (result == NULL) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":4,\"msg\":\"获取查询结果失败\"}"));
+		return 200;
+	}
+	unsigned long long rows = mysql_num_rows(result);
+	if (rows < 1) {
+		mysql_free_result(result);
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":0,\"msg\":\"数据无更新\"}"));
+		return 200;
+	}
+	std::vector<std::string> fail_urls;
+	MYSQL_ROW row_first; //一行数据的类型安全表示
+	unsigned long *row_len;
+	while ((row_first = mysql_fetch_row(result)) != NULL &&
+		(row_len = mysql_fetch_lengths(result)) != NULL) {
+		std::string image_id(row_first[0], row_len[0]);  //获取_id
+		std::string image_url(row_first[1], row_len[1]);   //获取url
+
+		std::string jsonstr;
+		// 获取实际文件路径
+		unispace::us_ustring realpath = r_storage_mgr.get_image_real_path(image_url);
+		/* 读取元数据记录 */
+		int ret_js = us_read_cms_metadata_record(realpath, &jsonstr);
+		if (ret_js < 0) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+		rapidjson::Document doc1;
+		doc1.Parse(jsonstr.c_str());
+		if (doc1.HasParseError()) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+
+		/* 插入元数据 */
+		std::string sql_update;
+		sql_update.reserve(8192);
+		sql_update = "update " + tablename + " set status = 0, ";   //插入数据时将status置为0
+		for (int i_field = 0; i_field < metaMapTableSize; ++i_field) {
+			std::string db_field_name = std::to_string(pMetaMapTable[i_field].m_db_field);   //数据库字段名
+			sql_update.append("`").append(db_field_name).append("` = ").append("");
+
+			std::string db_field_value;
+			if (doc1.HasMember(db_field_name.c_str())) {
+				if (!doc1[db_field_name.c_str()].IsNull()) {
+					if (pMetaMapTable[i_field].m_custon_field == "ImgRange") {
+						db_field_value = doc1[db_field_name.c_str()].GetString();
+						db_field_value = "ST_GeomFromText('Polygon" + db_field_value + "')";
+						sql_update.append(db_field_value).append(", ");
+					}
+					/*只有这三种类型*/
+					else if (doc1[db_field_name.c_str()].IsInt64()) {
+						int colv = doc1[db_field_name.c_str()].GetInt64();
+						db_field_value = std::to_string(colv);
+						sql_update.append(db_field_value).append(", ");
+					}
+					else if (doc1[db_field_name.c_str()].IsDouble()) {
+						double colv = doc1[db_field_name.c_str()].GetDouble();
+						db_field_value = std::to_string(colv);
+						sql_update.append(db_field_value).append(", ");
+					}
+					else if (doc1[db_field_name.c_str()].IsString()) {
+						db_field_value = doc1[db_field_name.c_str()].GetString();
+						sql_update.append("'").append(db_field_value).append("', ");
+					}
+				}
+			}
+		}
+		sql_update = sql_update.substr(0, sql_update.size() - 2);
+		sql_update.append(" where url = '").append(image_url).append("'");
+
+		if (mysql_real_query(pMysql, sql_update.c_str(), sql_update.size()) != 0) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+	} //end while
+	  // 释放查询结果
+	mysql_free_result(result);
+
+	bytes_append(response_body,
+		LITERAL_STRING_U8(u8"{\"status\":0,\"fails\":[\""));
+	for (size_t i = 0; i < fail_urls.size(); ++i) {
+		bytes_append(response_body, fail_urls[i]);
+		bytes_append(response_body, "\",\"");
+	}
+	if (!fail_urls.empty()) { response_body.pop_back(); }
+	response_body.pop_back();
+	bytes_append(response_body, "]}");
+	return 200;
+}
+
+
+int ngcc_create_tb_trigger(std::string host, int port,
+	std::string user, std::string password, std::string database)
+{
+	//初始化mysql
+	MYSQL * pMysql = mysql_init(NULL); 
+	if (pMysql == NULL)
+	{
+		return -1; /*mysql初始化失败*/
+	}
+
+	//连接数据库服务器
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, host.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		return -2; /*连接数据库失败*/
+	}
+
+	//如果ngcc_metadata表格存在的话就先删除再创建
+	std::string sql = "DROP TABLE IF EXISTS `ngcc_metadata`";
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0)
+	{
+		printf("mysql_real_query failed: error %u ( %s )",
+			mysql_errno(pMysql), mysql_error(pMysql));
+		return -3;
+	}
+
+	//创建ngcc_metadata表格
+	sql.clear();
+	sql.reserve(4096);
+	sql.append("CREATE TABLE `ngcc_metadata` (\
+		`_id` binary(16) NOT NULL,\
+		`url` varchar(767) NOT NULL,\
+		`status` int(11) NOT NULL,\
+		`1` double DEFAULT NULL COMMENT '地理范围MaxX',\
+		`2` double DEFAULT NULL COMMENT '地理范围MinX',\
+		`3` double DEFAULT NULL COMMENT '地理范围MaxY',\
+		`4` double DEFAULT NULL COMMENT '地理范围MinY',\
+		`5` geometry NOT NULL COMMENT '地理范围((西南，东南，东北，西北))',\
+		`75` geometry NOT NULL COMMENT '地理角点((西南，东南，东北，西北))',\
+		`6` varchar(50) DEFAULT NULL COMMENT '元数据文件名称',\
+		`7` varchar(50) DEFAULT NULL COMMENT '产品名称',\
+		`8` varchar(50) DEFAULT NULL COMMENT '产品版权单位名',\
+		`9` varchar(50) DEFAULT NULL COMMENT '产品生产单位名',\
+		`10` varchar(50) DEFAULT NULL COMMENT '产品出版单位名',\
+		`11` int(11) DEFAULT NULL COMMENT '产品生产时间',\
+		`12` varchar(10) DEFAULT NULL COMMENT '密级',\
+		`13` double DEFAULT NULL COMMENT '地面分辨率',\
+		`14` varchar(10) DEFAULT NULL COMMENT '影像色彩模式',\
+		`15` int(11) DEFAULT NULL COMMENT '像素位数',\
+		`16` double DEFAULT NULL COMMENT '整景数据量大小',\
+		`17` varchar(30) DEFAULT NULL COMMENT '数据格式',\
+		`18` varchar(20) DEFAULT NULL COMMENT '椭球长半径',\
+		`19` varchar(20) DEFAULT NULL COMMENT '椭球扁率',\
+		`20` varchar(20) DEFAULT NULL COMMENT '所采用大地基准',\
+		`21` varchar(50) DEFAULT NULL COMMENT '地图投影',\
+		`22` int(11) DEFAULT NULL COMMENT '中央子午线',\
+		`23` varchar(10) DEFAULT NULL COMMENT '分带方式',\
+		`24` int(11) DEFAULT NULL COMMENT '高斯-克吕格投影带号',\
+		`25` varchar(10) DEFAULT NULL COMMENT '坐标单位',\
+		`26` varchar(10) DEFAULT NULL COMMENT '高程系统名',\
+		`27` varchar(20) DEFAULT NULL COMMENT '高程基准',\
+		`28` varchar(20) DEFAULT NULL COMMENT '卫星名称',\
+		`29` varchar(10) DEFAULT NULL COMMENT '全色影像传感器类型',\
+		`30` double DEFAULT NULL COMMENT '全色卫星影像分辨率',\
+		`31` varchar(30) DEFAULT NULL COMMENT '全色卫星影像轨道号',\
+		`32` int(11) DEFAULT NULL COMMENT '全色卫星影像获取时间',\
+		`33` varchar(10) DEFAULT NULL COMMENT '多光谱影像传感器类型',\
+		`34` int(11) DEFAULT NULL COMMENT '多光谱波段数量',\
+		`35` varchar(20) DEFAULT NULL COMMENT '多光谱波段名称',\
+		`36` double DEFAULT NULL COMMENT '多光谱卫星影像分辨率',\
+		`37` varchar(30) DEFAULT NULL COMMENT '多光谱卫星影像轨道号',\
+		`38` int(11) DEFAULT NULL COMMENT '多光谱卫星影像获取时间',\
+		`39` text COMMENT '卫星影像数据质量评价',\
+		`40` int(11) DEFAULT NULL COMMENT 'DEM格网间距',\
+		`41` varchar(30) DEFAULT NULL COMMENT 'DEM精度情况',\
+		`42` varchar(30) DEFAULT NULL COMMENT '控制资料来源',\
+		`43` double DEFAULT NULL COMMENT '外参数解算平面中误差(X)',\
+		`44` double DEFAULT NULL COMMENT '外参数解算平面中误差(Y)',\
+		`45` double DEFAULT NULL COMMENT '外参数解算高程中误差',\
+		`46` varchar(20) DEFAULT NULL COMMENT '参数解算作业员',\
+		`47` varchar(20) DEFAULT NULL COMMENT '参数解算检查员',\
+		`48` varchar(10) DEFAULT NULL COMMENT '数据生产方式',\
+		`49` text COMMENT '立体模型编辑情况',\
+		`50` varchar(20) DEFAULT NULL COMMENT '正射纠正软件',\
+		`51` varchar(10) DEFAULT NULL COMMENT '重采样方法',\
+		`52` text COMMENT '正射纠正总结',\
+		`53` varchar(20) DEFAULT NULL COMMENT '正射纠正作业员',\
+		`54` varchar(20) DEFAULT NULL COMMENT '正射纠正检查员',\
+		`55` double DEFAULT NULL COMMENT '西边最大接边差',\
+		`56` double DEFAULT NULL COMMENT '北边最大接边差',\
+		`57` double DEFAULT NULL COMMENT '东边最大接边差',\
+		`58` double DEFAULT NULL COMMENT '南边最大接边差',\
+		`59` text COMMENT '接边质量评价',\
+		`60` varchar(20) DEFAULT NULL COMMENT '接边作业员',\
+		`61` varchar(20) DEFAULT NULL COMMENT '接边检查员',\
+		`62` double DEFAULT NULL COMMENT '多光谱配准纠正中误差(X)',\
+		`63` double DEFAULT NULL COMMENT '多光谱配准纠正中误差(Y)',\
+		`64` int(11) DEFAULT NULL COMMENT '检查点个数',\
+		`65` double DEFAULT NULL COMMENT '检查点平面中误差',\
+		`66` double DEFAULT NULL COMMENT '检查点最大误差',\
+		`67` text COMMENT '院级检查结论',\
+		`68` varchar(50) DEFAULT NULL COMMENT '院级检查单位',\
+		`69` varchar(20) DEFAULT NULL COMMENT '院级检查人',\
+		`70` int(11) DEFAULT NULL COMMENT '院级检查时间',\
+		`71` varchar(20) DEFAULT NULL COMMENT '局级验收人',\
+		`72` varchar(50) DEFAULT NULL COMMENT '局级验收单位',\
+		`73` text COMMENT '局级验收意见',\
+		`74` int(11) DEFAULT NULL COMMENT '局级验收时间',\
+		PRIMARY KEY(`_id`),\
+		UNIQUE KEY `index_url` (`url`),\
+		SPATIAL KEY `box` (`5`)\
+		) ENGINE = InnoDB DEFAULT CHARSET = utf8");
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0)
+	{
+		printf("mysql_real_query failed: error %u ( %s )",
+			mysql_errno(pMysql), mysql_error(pMysql));
+		return -3;
+	}
+
+	/*如果触发器存在的话先删除后创建*/
+	sql = "DROP TRIGGER IF EXISTS `insert_ngcc`";
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0)
+	{
+		printf("mysql_real_query failed: error %u ( %s )",
+			mysql_errno(pMysql), mysql_error(pMysql));
+		return -3;
+	}
+
+	/*创建insert触发器*/
+	sql = "CREATE TRIGGER `insert_ngcc` AFTER INSERT ON `image` FOR EACH ROW begin \
+		insert into ngcc_metadata(_id, url, status, `5`, `75`) \
+		values(new._id, new.url, 1, ST_GeomFromText('POLYGON((-1e10 -1e10, -1e10 -1e10, -1e10 -1e10, -1e10 -1e10, -1e10 -1e10))'), \
+		ST_GeomFromText('POLYGON((-1e10 -1e10, -1e10 -1e10, -1e10 -1e10, -1e10 -1e10, -1e10 -1e10))'));\
+		end ";
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0)
+	{
+		printf("mysql_real_query failed: error %u ( %s )",
+			mysql_errno(pMysql), mysql_error(pMysql));
+		return -3;
+	}
+
+	/*如果delete触发器存在的话先删除后创建*/
+	sql = "DROP TRIGGER IF EXISTS `delete_ngcc`";
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0)
+	{
+		printf("mysql_real_query failed: error %u ( %s )",
+			mysql_errno(pMysql), mysql_error(pMysql));
+		return -3;
+	}
+
+	/*创建delete触发器*/
+	sql = "CREATE TRIGGER `delete_ngcc` AFTER DELETE ON `image` FOR EACH ROW begin \
+		delete from ngcc_metadata where _id = old._id;\
+		end";
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0)
+	{
+		printf("mysql_real_query failed: error %u ( %s )",
+			mysql_errno(pMysql), mysql_error(pMysql));
+		return -3;
+	}
+
+	if (pMysql != NULL)
+	{
+		mysql_close(pMysql);
+	}
+
+	return 0;
+}
+
+#endif
+
+
+
+/// ********************************************************************************
+/// <summary>
+/// 重建用户元数据存储
+/// </summary>
+/// <param name="path">HTTP GET请求路径</param>
+/// <param name="headers">HTTP请求包头</param>
+/// <param name="query_parameters">URL中的查询参数</param>
+/// <param name="path_parameters">URL中的路径参数</param>
+/// <param name="request_body">请求的Content-Body内容</param>
+/// <param name="dest_endpoint">终端地址</param>
+/// <param name="response_headers">响应包HTTP头</param>
+/// <param name="response_body">响应包HTTP Content内容</param>
+/// <returns>HTTP响应状态码</returns>
+/// <created>solym@sohu.com,2018/8/29</created>
+/// ********************************************************************************
+int us_cms_http_post_rebuild(
+	const std::string& path,
+	const std::multimap< std::string, std::string >& headers,
+	const std::multimap< std::string, std::string >& query_parameters,
+	const std::map< std::string, std::string >& path_parameters,
+	const std::vector<uint8_t>& request_body,
+	const std::string& dest_endpoint,
+	std::multimap< std::string, std::string >& response_headers,
+	std::vector<uint8_t>& response_body)
+{
+	response_headers.insert(std::make_pair(std::string("Content-type"), std::string("text/json")));
+
+	/*连接数据库*/
+	unispace::us_data_storage_manager& r_storage_mgr =
+		unispace::us_data_storage_manager::get_instance();
+	const std::string cmsTableName = "custmeta";
+
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "123456";
+	std::string database = "shandong_metadata";
+
+	/*初始化mysql*/
+	MYSQL * pMysql = mysql_init(NULL);  /*在程序使用Mysql的最开始必须调用mysql_int()初始化*/
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 200;
+	}
+	/*连接数据库服务器*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 500;
+	}
+
+	/*获取字段映射表*/
+	int metaMapTableSize = 0;
+	const us_cms_metdata_map *pMetaMapTable = us_get_cms_metadata_map_table(&metaMapTableSize);
+	if (pMetaMapTable == nullptr || metaMapTableSize < 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"获取字段映射表失败\"}"));
+		return 200;
+	}
+
+	/*清空元数据存储表*/
+	std::string sql_clear = "truncate table " + cmsTableName;
+	if (mysql_real_query(pMysql, sql_clear.c_str(), sql_clear.size()) != 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":3,\"msg\":\"清空元数据查记录表失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+
+	/*读取image元数据表中的全部记录，重建用户元数据的存储记录*/
+	std::string sql_read = "select _id, url from image";
+	if (mysql_real_query(pMysql, sql_read.c_str(), sql_read.size()) != 0)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":4,\"msg\":\"读取image表失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+	MYSQL_RES *result = mysql_store_result(pMysql);
+	if (result == NULL)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":5,\"msg\":\"获取sql查询结果失败\"}"));
+		return 200;
+	}
+
+	/*返回的记录数目，如果小于1，则image元数据表为空，不能重建*/
+	unsigned long long rows = mysql_num_rows(result);
+	if (rows < 1)
+	{
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"image 元数据表为空\"}"));
+		mysql_free_result(result);
+		return 200;
+	}
+	MYSQL_ROW rown; //一行数据的类型安全表示
+	std::vector<std::string> fail_urls;
+	unsigned long *row_len;
+
+	std::string sql_pre_insert;
+	sql_pre_insert.reserve(metaMapTableSize*16);
+	sql_pre_insert.append("insert into ").append(cmsTableName).append("(`_id`, `url`, `status`, ");
+	for (int i = 0; i < metaMapTableSize; i++)
+	{
+		std::string buf_i = std::to_string(pMetaMapTable[i].m_db_field);
+		sql_pre_insert.append("`").append(buf_i).append("`, ");
+	}
+	sql_pre_insert.resize(sql_pre_insert.size() - 2);
+
+	while ((rown = mysql_fetch_row(result)) != NULL &&
+		(row_len = mysql_fetch_lengths(result)) != NULL) {
+		std::string out_json;
+
+		std::string image_id(rown[0], row_len[0]);  //获取_id
+		std::string image_url(rown[1], row_len[1]);   //获取url
+
+		// 获取实际文件路径
+		//unispace::us_ustring realpath = r_storage_mgr.get_image_real_path(image_url);
+		//根据image中的url读取元数据记录，以json格式存放在out_json
+		int ret_read = us_read_cms_metadata_record(image_url, &out_json);
+		if (ret_read < 0) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+		rapidjson::Document doc1;
+		doc1.Parse(out_json.c_str());
+		if (doc1.HasParseError()) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+
+		/*插入数据（将id，url，status（插入元数据则它记为0），元数据全部插入）*/
+		std::string sql_insert = sql_pre_insert;
+		sql_insert.reserve(metaMapTableSize*32);
+		sql_insert.append(") values('").append(image_id).append("', '").append(image_url)
+			.append("', ").append("0, ");   //重建时status置为0
+
+		for (int i = 0; i < metaMapTableSize; i++)
+		{
+			std::string colname = std::to_string(pMetaMapTable[i].m_db_field);
+
+			std::string value_db = "";
+			rapidjson::Document::ConstMemberIterator iter = doc1.FindMember(colname.c_str());
+			if (iter == doc1.MemberEnd())
+			{
+				break;
+			}
+
+			if (pMetaMapTable[i].m_custon_field == "ImgRange" &&
+				iter->value.IsString()) {
+				value_db = iter->value.GetString();
+				value_db = "ST_GeomFromText('Polygon" + value_db + "')";
+				sql_insert.append(value_db).append(", ");
+			}
+			/*只有这三种类型*/
+			else if (iter->value.IsInt64())
+			{
+				int colv = iter->value.GetInt64();
+				value_db = std::to_string(colv);
+				sql_insert.append(value_db).append(", ");
+			}
+			else if (iter->value.IsDouble())
+			{
+				double colv = iter->value.GetDouble();
+				value_db = std::to_string(colv);
+				sql_insert.append(value_db).append(", ");
+			}
+			else if (iter->value.IsString())
+			{
+				value_db = iter->value.GetString();
+				sql_insert.append("'").append(value_db).append("', ");
+			}
+		}
+
+		sql_insert.resize(sql_insert.size() - 2);
+		sql_insert.append(")");
+		if (mysql_real_query(pMysql, sql_insert.data(), sql_insert.size()) != 0)
+		{
+			fail_urls.push_back(image_url);
+			continue;
+		}
+	}  // end while
+
+	mysql_free_result(result);
+
+	bytes_append(response_body,
+		LITERAL_STRING_U8(u8"{\"status\":0,\"fails\":[\""));
+	for (size_t i = 0; i < fail_urls.size(); ++i) {
+		bytes_append(response_body, fail_urls[i]);
+		bytes_append(response_body, "\",\"");
+	}
+	if (!fail_urls.empty()) { response_body.pop_back(); }
+	response_body.pop_back();
+
+	bytes_append(response_body, "]}");
+
+
+	return 200;
+}
+
+
+/// ********************************************************************************
+/// <summary>
+/// 刷新用户元数据存储
+/// </summary>
+/// <param name="path">HTTP GET请求路径</param>
+/// <param name="headers">HTTP请求包头</param>
+/// <param name="query_parameters">URL中的查询参数</param>
+/// <param name="path_parameters">URL中的路径参数</param>
+/// <param name="request_body">请求的Content-Body内容</param>
+/// <param name="dest_endpoint">终端地址</param>
+/// <param name="response_headers">响应包HTTP头</param>
+/// <param name="response_body">响应包HTTP Content内容</param>
+/// <returns>HTTP响应状态码</returns>
+/// <created>solym@sohu.com,2018/8/29</created>
+/// ********************************************************************************
+int us_cms_http_post_refresh(
+	const std::string& path,
+	const std::multimap< std::string, std::string >& headers,
+	const std::multimap< std::string, std::string >& query_parameters,
+	const std::map< std::string, std::string >& path_parameters,
+	const std::vector<uint8_t>& request_body,
+	const std::string& dest_endpoint,
+	std::multimap< std::string, std::string >& response_headers,
+	std::vector<uint8_t>& response_body)
+{
+	response_headers.insert(std::make_pair(std::string("Content-type"), std::string("text/json")));
+
+	unispace::us_data_storage_manager& r_storage_mgr =
+		unispace::us_data_storage_manager::get_instance();
+
+	/*连接数据库*/
+	const std::string cmsTableName = "custmeta";
+
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "123456";
+	std::string database = "shandong_metadata";
+
+	/*初始化mysql*/
+	MYSQL * pMysql = mysql_init(NULL);  /*在程序使用Mysql的最开始必须调用mysql_int()初始化*/
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 200;
+	}
+	/*连接数据库服务器*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 500;
+	}
+
+	/*获取字段映射表*/
+	int metaMapTableSize = 0;
+	const us_cms_metdata_map *pMetaMapTable = us_get_cms_metadata_map_table(&metaMapTableSize);
+	if (pMetaMapTable == NULL || metaMapTableSize < 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"获取字段映射表失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+
+	/*查找status为1对应的url*/
+	std::string sql_search_status = "select _id, url from " + cmsTableName + " where status = 1";
+	if (mysql_real_query(pMysql, sql_search_status.c_str(), sql_search_status.size()) != 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"执行sql查询失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+
+	/*获取url并读取内容插入元数据记录表*/
+	MYSQL_RES *result = mysql_store_result(pMysql);
+	if (result == NULL) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":4,\"msg\":\"获取查询结果失败\"}"));
+		return 200;
+	}
+	unsigned long long rows = mysql_num_rows(result);
+	if (rows < 1) {
+		mysql_free_result(result);
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":0,\"msg\":\"数据无更新\"}"));
+		return 200;
+	}
+	std::vector<std::string> fail_urls;
+	MYSQL_ROW row_first; //一行数据的类型安全表示
+	unsigned long *row_len;
+	while ((row_first = mysql_fetch_row(result)) != NULL &&
+		(row_len = mysql_fetch_lengths(result)) != NULL) {
+		std::string image_id(row_first[0], row_len[0]);  //获取_id
+		std::string image_url(row_first[1], row_len[1]);   //获取url
+
+		std::string jsonstr;
+		// 获取实际文件路径
+		//unispace::us_ustring realpath = r_storage_mgr.get_image_real_path(image_url);
+		/* 读取元数据记录 */
+		int ret_js = us_read_cms_metadata_record(image_url, &jsonstr);
+		if (ret_js < 0) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+		rapidjson::Document doc1;
+		doc1.Parse(jsonstr.c_str());
+		if (doc1.HasParseError()) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+
+		/* 插入元数据 */
+		std::string sql_update;
+		sql_update.reserve(8192);
+		sql_update.append("update ").append(cmsTableName).append(" set status = 0, ");   //插入数据时将status置为0
+		for (int i_field = 0; i_field < metaMapTableSize; ++i_field) {
+			std::string db_field_name = std::to_string(pMetaMapTable[i_field].m_db_field);   //数据库字段名
+			sql_update.append("`").append(db_field_name).append("` = ").append("");
+
+			std::string db_field_value;
+			rapidjson::Document::ConstMemberIterator iter = doc1.FindMember(db_field_name.c_str());
+			if (iter == doc1.MemberEnd())
+			{
+				break;
+			}
+			if (pMetaMapTable[i_field].m_custon_field == "ImgRange" &&
+				iter->value.IsString()) {
+				db_field_value = iter->value.GetString();
+				db_field_value = "ST_GeomFromText('Polygon" + db_field_value + "')";
+				sql_update.append(db_field_value).append(", ");
+			}
+			/*只有这三种类型*/
+			else if (iter->value.IsInt64()) {
+				int colv = iter->value.GetInt64();
+				db_field_value = std::to_string(colv);
+				sql_update.append(db_field_value).append(", ");
+			}
+			else if (iter->value.IsDouble()) {
+				double colv = iter->value.GetDouble();
+				db_field_value = std::to_string(colv);
+				sql_update.append(db_field_value).append(", ");
+			}
+			else if (iter->value.IsString()) {
+				db_field_value = iter->value.GetString();
+				sql_update.append("'").append(db_field_value).append("', ");
+			}
+		}
+		sql_update.resize(sql_update.size() - 2);
+		sql_update.append(" where url = '").append(image_url).append("'");
+
+		if (mysql_real_query(pMysql, sql_update.c_str(), sql_update.size()) != 0) {
+			fail_urls.push_back(image_url);
+			continue;
+		}
+	} //end while
+	  // 释放查询结果
+	mysql_free_result(result);
+
+	bytes_append(response_body,
+		LITERAL_STRING_U8(u8"{\"status\":0,\"fails\":[\""));
+	for (size_t i = 0; i < fail_urls.size(); ++i) {
+		bytes_append(response_body, fail_urls[i]);
+		bytes_append(response_body, "\",\"");
+	}
+	if (!fail_urls.empty()) { response_body.pop_back(); }
+	response_body.pop_back();
+	bytes_append(response_body, "]}");
+	return 200;
+}
+
+/// ********************************************************************************
+/// <summary>
+/// 搜索用户元数据
+/// </summary>
+/// <param name="path">HTTP GET请求路径</param>
+/// <param name="headers">HTTP请求包头</param>
+/// <param name="query_parameters">URL中的查询参数</param>
+/// <param name="path_parameters">URL中的路径参数</param>
+/// <param name="request_body">请求的Content-Body内容</param>
+/// <param name="dest_endpoint">终端地址</param>
+/// <param name="response_headers">响应包HTTP头</param>
+/// <param name="response_body">响应包HTTP Content内容</param>
+/// <returns>HTTP响应状态码</returns>
+/// <created>solym@sohu.com,2018/8/29</created>
+/// ********************************************************************************
+int us_cms_http_get_search(
+	const std::string& path,
+	const std::multimap< std::string, std::string >& headers,
+	const std::multimap< std::string, std::string >& query_parameters,
+	const std::map< std::string, std::string >& path_parameters,
+	const std::vector<uint8_t>& request_body,
+	const std::string& dest_endpoint,
+	std::multimap< std::string, std::string >& response_headers,
+	std::vector<uint8_t>& response_body)
+{
+	response_headers.insert(std::make_pair(std::string("Content-type"), std::string("text/json")));
+	// 存放用户元数据记录的表
+	const std::string cmsTableName = "custmeta";
+
+	/*解析request_body中的json字符串*/
+	rapidjson::Document jsondoc;
+	jsondoc.Parse((char*)request_body.data(), request_body.size());
+	if (jsondoc.HasParseError() || !jsondoc.IsObject()) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":3,\"msg\":\"json格式不正确\"}"));
+		return 400;
+	}
+	rapidjson::Value::ConstMemberIterator queryiter = jsondoc.FindMember("query");
+	if (queryiter == jsondoc.MemberEnd() || !queryiter->value.IsObject()) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":3,\"msg\":\"json格式不正确\"}"));
+		return 400;
+	}
+
+
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "123456";
+	std::string database = "shandong_metadata";
+
+	/*初始化mysql*/
+	MYSQL * pMysql = mysql_init(NULL);  /*在程序使用Mysql的最开始必须调用mysql_int()初始化*/
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 200;
+	}
+	/*连接数据库服务器*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 500;
+	}
+
+	// 获取字段映射表
+	int metaMapTableSize = 0;
+	const us_cms_metdata_map* pMetaMapTable = us_get_cms_metadata_map_table(&metaMapTableSize);
+	if (pMetaMapTable == nullptr || metaMapTableSize < 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"获取字段映射表失败\"}"));
+		return 200;
+	}
+
+	// sql语句，获取符合条件的url字段
+	std::string sql;
+	sql.reserve(4096 * 4);
+	sql.append("select `url` from ").append(cmsTableName).append(" where ");
+
+	/*query参数*/
+	const auto& queryobj = queryiter->value.GetObject();
+	// match参数（精确查询和字符串的正则查询)
+	rapidjson::Document::ConstMemberIterator iter = queryobj.FindMember("match");
+	if (iter != queryobj.MemberEnd() && iter->value.IsArray()) {
+		const auto& matchArray = iter->value.GetArray();
+		for (rapidjson::SizeType i = 0; i < matchArray.Size(); ++i) {
+			// 逐个获取待查询字段内容
+			const rapidjson::Document::ValueType& fieldInfo = matchArray[i];
+			std::string fieldname;
+			int querymode = 0;
+			// 获取字段名
+			rapidjson::Document::ConstMemberIterator fielditer = fieldInfo.FindMember("field");
+			if (fielditer == fieldInfo.MemberEnd() || !fielditer->value.IsString()) { continue; }
+			fieldname.assign(fielditer->value.GetString(), fielditer->value.GetStringLength());
+			// 获取查询模式
+			fielditer = fieldInfo.FindMember("mode");
+			if (fielditer == fieldInfo.MemberEnd() || !fielditer->value.IsUint()) { continue; }
+			querymode = fielditer->value.GetUint();
+
+			// 获取匹配串
+			std::string pattern;
+			fielditer = fieldInfo.FindMember("pattern");
+			if (fielditer == fieldInfo.MemberEnd()) { continue; }
+			if (fielditer->value.IsString()) { pattern = fielditer->value.GetString(); }
+			else if (fielditer->value.IsInt64()) {
+				pattern = std::to_string(fielditer->value.GetInt64());
+			}
+			else if (fielditer->value.IsDouble()) {
+				pattern = std::to_string(fielditer->value.GetDouble());
+			}
+			// 如果匹配串为空，跳过该字段不作查询
+			if (pattern.empty()) { continue; }
+
+			// 在字段映射表中查找字段
+			const us_cms_metdata_map* pFeild = NULL;
+			for (int i = 0; i < metaMapTableSize; ++i) {
+				if (pMetaMapTable[i].m_custon_field == fieldname) {
+					pFeild = pMetaMapTable + i;
+					break;
+				}
+			}
+			if (pFeild == NULL) {
+				bytes_append(response_body, LITERAL_STRING_U8(u8"{\"status\":5,\"msg\":\"未找到'"));
+				bytes_append(response_body, fieldname);
+				bytes_append(response_body, LITERAL_STRING_U8(u8"'字段\"}"));
+				return 400;
+			}
+			if ((pFeild->m_mode & querymode) == 0) {
+				bytes_append(response_body, LITERAL_STRING_U8("{\"status\":4,\"msg\":\""));
+				bytes_append(response_body, fieldname);
+				bytes_append(response_body, LITERAL_STRING_U8(u8"查询模式不正确\"}"));
+				return 400;
+			}
+
+
+			// 根据不同查询模式填写sql语句
+			switch (querymode) {
+			case 0x01: /* 用正则表达式查询 */
+			{
+				// 正则查询的匹配串以空格分割，处理并写成正则表达式
+				// 将空格替换为'|'
+				std::string regexp;
+				regexp.reserve(pattern.size());
+				for (size_t i = 0, space = 0; i < pattern.size(); ++i) {
+					if (pattern[i] == ' ') { ++space; continue; }
+					if (space != 0) { regexp.push_back('|'); space = 0; }
+					regexp.push_back(pattern[i]);
+				}
+				sql.append("(`").append(std::to_string(pFeild->m_db_field))
+					.append("` regexp '").append(regexp).append("')").append(" and ");
+			}
+			break;
+			case 0x02: /* 字符串精确查询 */
+				sql.append("(`").append(std::to_string(pFeild->m_db_field))
+					.append("` = '").append(pattern).append("')").append(" and ");
+				break;
+			case 0x04: /* 日期精确查询 */
+			case 0x10: /* 数值精确查询 */
+				sql.append("(`").append(std::to_string(pFeild->m_db_field))
+					.append("` = ").append(pattern).append(")").append(" and ");
+				break;
+			default:
+				break;
+			}
+		}
+	} // end if (queryobj.HasMember("match"))
+
+	  // range参数 （数值或者日期的范围查询
+	iter = queryobj.FindMember("range");
+	if (queryobj.HasMember("range") && iter->value.IsArray()) {
+		const auto& rangeArray = iter->value.GetArray();
+		for (rapidjson::SizeType i = 0; i < rangeArray.Size(); ++i) {
+			const rapidjson::Document::ValueType& fieldInfo = rangeArray[i];
+			std::string fieldname, minvalue, maxvalue;
+			// 获取字段名
+			rapidjson::Document::ConstMemberIterator fielditer = fieldInfo.FindMember("field");
+			if (fielditer == fieldInfo.MemberEnd() || !fielditer->value.IsString()) { continue; }
+			fieldname.assign(fielditer->value.GetString(), fielditer->value.GetStringLength());
+
+			// 在字段映射表中查找字段
+			const us_cms_metdata_map* pFeild = NULL;
+			for (int i = 0; i < metaMapTableSize; ++i) {
+				if (pMetaMapTable[i].m_custon_field == fieldname) {
+					pFeild = pMetaMapTable + i;
+					break;
+				}
+			}
+			if (pFeild == NULL) {
+				bytes_append(response_body, LITERAL_STRING_U8(u8"{\"status\":5,\"msg\":\"未找到'"));
+				bytes_append(response_body, fieldname);
+				bytes_append(response_body, LITERAL_STRING_U8(u8"'字段\"}"));
+				return 400;
+			}
+			// 0x08 是日期的范围搜索 0x20是数值的范围搜索
+			if ((pFeild->m_mode & 0x28) == 0) {
+				bytes_append(response_body, LITERAL_STRING_U8("{\"status\":4,\"msg\":\""));
+				bytes_append(response_body, fieldname);
+				bytes_append(response_body, LITERAL_STRING_U8(u8"查询模式不正确\"}"));
+				return 400;
+			}
+			// 最小值
+			fielditer = fieldInfo.FindMember("min");
+			if (fielditer != fieldInfo.MemberEnd()) {
+				if (fielditer->value.IsInt64()) {
+					minvalue = std::to_string(fielditer->value.GetInt64());
+				}
+				else if (fielditer->value.IsDouble()) {
+					minvalue = std::to_string(fielditer->value.GetDouble());
+				}
+			}
+			// 最大值
+			fielditer = fieldInfo.FindMember("max");
+			if (fielditer != fieldInfo.MemberEnd()) {
+				if (fielditer->value.IsInt64()) {
+					maxvalue = std::to_string(fielditer->value.GetInt64());
+				}
+				else if (fielditer->value.IsDouble()) {
+					maxvalue = std::to_string(fielditer->value.GetDouble());
+				}
+			}
+			// 如果最大最小值都为空，跳过不查询
+			if (minvalue.empty() && maxvalue.empty()) { continue; }
+
+			// 只有最大值的情况
+			if (minvalue.empty()) {
+				sql.append("(`").append(std::to_string(pFeild->m_db_field))
+					.append("` <= ").append(maxvalue).append(")").append(" and ");
+			}
+			else if (maxvalue.empty()) {
+				sql.append("(`").append(std::to_string(pFeild->m_db_field))
+					.append("` >= ").append(minvalue).append(")").append(" and ");
+			}
+			else {
+				sql.append("(`").append(std::to_string(pFeild->m_db_field))
+					.append("` between ").append(minvalue).append(" and ")
+					.append(maxvalue).append(")").append(" and ");
+			}
+		}
+	} // end if (queryobj.HasMember("range"))
+
+	  /*geometry参数 （地理范围的查询[x,y,x,y,x,y...]）*/
+	  //使用迭代器查找geometry参数
+	iter = queryobj.FindMember("geometry");
+	if (iter != queryobj.MemberEnd() && iter->value.IsArray()) {
+		const auto& polyArray = iter->value.GetArray();
+		std::vector<double> boxArray;
+		boxArray.reserve(polyArray.Size() * 4);
+		// 方法一：外包框重叠
+		if (0) {
+			// 获取数据库中的字段名
+			std::string dbfiled_max_x, dbfiled_min_x, dbfiled_max_y, dbfiled_min_y;
+			for (int i = 0; i < metaMapTableSize; ++i) {
+				if (pMetaMapTable[i].m_custon_field == "MaxX") {
+					dbfiled_max_x = std::to_string(pMetaMapTable[i].m_db_field);
+				}
+				else if (pMetaMapTable[i].m_custon_field == "MinX") {
+					dbfiled_min_x = std::to_string(pMetaMapTable[i].m_db_field);
+				}
+				else if (pMetaMapTable[i].m_custon_field == "MaxY") {
+					dbfiled_max_y = std::to_string(pMetaMapTable[i].m_db_field);
+				}
+				else if (pMetaMapTable[i].m_custon_field == "MinY") {
+					dbfiled_min_y = std::to_string(pMetaMapTable[i].m_db_field);
+				}
+			}
+			// 逐个获取polygon
+			for (size_t i = 0; i < polyArray.Size(); ++i) {
+				// "POLYGON((x1 y1,x2 y2,…,xn yn)）,(x1 y1,x2 y2,…,xm ym),......)"
+				if (!polyArray[i].IsString()) { continue; }
+				std::string polyStr(polyArray[i].GetString(), polyArray[i].GetStringLength());
+				// 方法一
+				const geos::geom::GeometryFactory* pFactory = geos::geom::GeometryFactory::getDefaultInstance();
+				geos::io::WKTReader wktreader(pFactory);
+				geos::geom::Geometry* pPoly = wktreader.read(polyStr);
+				if (pPoly == NULL) { continue; }
+				const geos::geom::Envelope* pBox = pPoly->getEnvelopeInternal();
+				if (pBox == NULL) { pFactory->destroyGeometry(pPoly); continue; }
+				boxArray.push_back(pBox->getMinX());
+				boxArray.push_back(pBox->getMinY());
+				boxArray.push_back(pBox->getMaxX());
+				boxArray.push_back(pBox->getMaxY());
+				pFactory->destroyGeometry(pPoly);
+				std::string x_min_s, y_min_s, x_max_s, y_max_s;
+				for (size_t i = 0; i < boxArray.size(); i += 4) {
+					// 填写sql查询语句
+					sql.append("(not(");
+					// boxMaxX < imgMinX
+					sql.append(std::to_string(boxArray[i + 2])).append(" < `").append(dbfiled_min_x).append("` or ");
+					// boxMinX > imgMaxX
+					sql.append(std::to_string(boxArray[i])).append(" > `").append(dbfiled_max_x).append("` or ");
+					// boxMaxY < imgMinY
+					sql.append(std::to_string(boxArray[i + 3])).append(" < `").append(dbfiled_min_y).append("` or ");
+					// boxMinY > imgMaxY
+					sql.append(std::to_string(boxArray[i + 1])).append(" > `").append(dbfiled_max_y).append("`)) and ");
+				}
+			}
+		}
+		// 方法二：MySQL空间索引
+		{
+			/*获取数据库中的字段名*/
+			std::string dbImgRangefiledName("5");
+			for (int i = 0; i < metaMapTableSize; ++i) {
+				if (pMetaMapTable[i].m_custon_field == "ImgRange") {
+					dbImgRangefiledName = std::to_string(pMetaMapTable[i].m_db_field);
+				}
+			}
+			// 逐个获取polygon
+			for (size_t i = 0; i < polyArray.Size(); ++i) {
+				// "POLYGON((x1 y1,x2 y2,…,xn yn)）,(x1 y1,x2 y2,…,xm ym),......)"
+				if (!polyArray[i].IsString()) { continue; }
+				std::string polyStr(polyArray[i].GetString(), polyArray[i].GetStringLength());
+				sql.append(" MBRIntersects(st_GeomFromText('").append(polyStr);
+				sql.append("'),`").append(dbImgRangefiledName).append("`)").append(" and ");
+			}
+		}
+	}
+
+	// 对sql语句结尾部分处理(去掉结尾的and或where)
+	size_t posand = sql.rfind("and");
+	if (posand == sql.size() - 4) { sql.resize(sql.size() - 4); }
+	else { sql.resize(sql.size() - 6); }
+
+	// size参数，获取几条记录
+	if (jsondoc.HasMember("size") && jsondoc["size"].IsInt64()) {
+		size_t size = jsondoc["size"].GetInt64();
+		sql.append(" limit ").append(std::to_string(size));
+	}
+
+	// from参数，从第几条记录开始获取
+	if (jsondoc.HasMember("from") && jsondoc["from"].IsInt64()) {
+		int from = jsondoc["from"].GetInt64();
+		sql.append(" offset ").append(std::to_string(from));
+	}
+	// 执行sql查询，并返回查询结果
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":9,\"msg\":\"执行sql查询失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+
+	MYSQL_RES *result = mysql_store_result(pMysql);
+	if (result == NULL) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":10,\"msg\":\"获取sql查询结果失败\"}"));
+		return 200;
+	}
+
+	// 返回了多少行
+	unsigned long long numrows = mysql_num_rows(result);
+	if (numrows < 1) {
+		mysql_free_result(result);
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":11,\"url\":[]}"));
+		return 200;
+	}
+
+	// 将获取到的结果写入json
+	rapidjson::StringBuffer strbuf;
+	strbuf.Reserve(numrows * 2048);
+	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+	writer.StartObject();
+	writer.Key("status");
+	writer.Int(0);
+	writer.Key("urls");
+	writer.StartArray();
+
+	MYSQL_ROW rown;
+	unsigned long* row_len = NULL;
+	while ((rown = mysql_fetch_row(result)) != NULL &&
+		(row_len = mysql_fetch_lengths(result)) != NULL) {
+		unsigned int num_fields = mysql_num_fields(result);
+		for (unsigned int i = 0; i < num_fields; ++i) {
+			writer.String(rown[i], row_len[i]);
+		}
+	}
+	writer.EndArray();
+	writer.EndObject();
+
+	bytes_append(response_body, (uint8_t*)strbuf.GetString(), strbuf.GetSize());
+
+	mysql_free_result(result);
+
+	return 200;
+}
+
+/// ********************************************************************************
+/// <summary>
+/// 获取用户元数据
+/// </summary>
+/// <param name="path">HTTP GET请求路径</param>
+/// <param name="headers">HTTP请求包头</param>
+/// <param name="query_parameters">URL中的查询参数</param>
+/// <param name="path_parameters">URL中的路径参数</param>
+/// <param name="request_body">请求的Content-Body内容</param>
+/// <param name="dest_endpoint">终端地址</param>
+/// <param name="response_headers">响应包HTTP头</param>
+/// <param name="response_body">响应包HTTP Content内容</param>
+/// <returns>HTTP响应状态码</returns>
+/// <created>solym@sohu.com,2018/8/29</created>
+/// ********************************************************************************
+int us_cms_http_get_getm(
+	const std::string& path,
+	const std::multimap< std::string, std::string >& headers,
+	const std::multimap< std::string, std::string >& query_parameters,
+	const std::map< std::string, std::string >& path_parameters,
+	const std::vector<uint8_t>& request_body,
+	const std::string& dest_endpoint,
+	std::multimap< std::string, std::string >& response_headers,
+	std::vector<uint8_t>& response_body)
+{
+	response_headers.insert(std::make_pair(std::string("Content-type"), std::string("text/json")));
+
+	// 存放用户元数据记录的表
+	const std::string cmsTableName = "custmeta";
+
+	/*读取请求实体*/
+	rapidjson::Document jsondoc;
+	jsondoc.Parse((char*)request_body.data(), request_body.size());
+	if (jsondoc.HasParseError() || !jsondoc.IsObject()) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":3,\"msg\":\"json格式不正确\"}"));
+		return 400;
+	}
+
+	/*从请求实体中获取url参数*/
+	std::vector<std::string> vect_urls;
+
+	rapidjson::Value::ConstMemberIterator iter = jsondoc.FindMember("urls");
+	if (iter != jsondoc.MemberEnd() && iter->value.IsArray()) {
+		const rapidjson::Value &urls = iter->value;
+		for (auto itr_urls = urls.Begin(); itr_urls != urls.End(); ++itr_urls) {
+			if (itr_urls->IsString()) {
+				vect_urls.push_back(std::string(itr_urls->GetString(), itr_urls->GetStringLength()));
+			}
+		}
+	}
+
+	if (vect_urls.empty()) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":2,\"msg\":\"无法从请求实体中获取到_id或者url\"}"));
+		return 400;
+	}
+
+
+	// 连接数据库
+	std::string hostip = "localhost";
+	int port = 3306;
+	std::string user = "root";
+	std::string password = "123456";
+	std::string database = "metadata2";
+
+	/*初始化mysql*/
+	MYSQL * pMysql = mysql_init(NULL);  /*在程序使用Mysql的最开始必须调用mysql_int()初始化*/
+	if (pMysql == NULL)
+	{
+		std::string rntStr = "{\"status\": 1, \"msg\": \"mysql init failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 200;
+	}
+	/*连接数据库服务器*/
+	int arg = 1;
+	mysql_options(pMysql, MYSQL_OPT_RECONNECT, &arg);
+
+	if (mysql_real_connect(pMysql, hostip.c_str(),
+		user.c_str(), password.c_str(), database.c_str(), port, NULL, 0) == NULL)
+	{
+		std::string rntStr = "{\"status\": 2, \"msg\": \"mysql_real_connect failed\"}";
+		response_body.insert(response_body.end(), (uint8_t*)rntStr.data(), (uint8_t*)(rntStr.data() + rntStr.size()));
+		return 500;
+	}
+
+	// 获取字段映射表
+	int metaMapTableSize = 0;
+	const us_cms_metdata_map *pMetaMapTable = us_get_cms_metadata_map_table(&metaMapTableSize);
+	if (pMetaMapTable == nullptr || metaMapTableSize < 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":4,\"msg\":\"获取字段映射表失败\"}"));
+		return 200;
+	}
+
+	std::vector<us_cms_metdata_map> metamaps;
+	metamaps.reserve(metaMapTableSize + 1);
+	/*metamaps.push_back({ "_id", 0, 1, 0 });*/
+	metamaps.push_back({ "url", 0, 1, 0 });
+	for (int i = 0; i < metaMapTableSize; ++i) {
+		metamaps.push_back(pMetaMapTable[i]);
+	}
+
+	// sql语句
+	std::string sql;
+	size_t size_sql = 100 + metaMapTableSize * 10 + vect_urls.size() * 1024;
+	sql.reserve(size_sql); //为sql预分配存储空间
+	sql.append("select url, ");
+	for (int i = 1; i < metamaps.size(); ++i) {
+		const us_cms_metdata_map &field = metamaps[i];
+		if (field.m_custon_field == "ImgRange") {
+			std::string i_str = std::to_string(field.m_db_field);
+			sql.append("ST_AsText(`").append(i_str).append("`) as `").append(i_str).append("`, ");
+			continue;
+		}
+		sql.append("`").append(std::to_string(field.m_db_field)).append("`, ");
+	}
+	sql = sql.substr(0, sql.size() - 2); // 移除多余逗号
+	sql.append(" from ").append(cmsTableName).append(" where ");
+
+	if (!vect_urls.empty()) {
+		for (auto itr = vect_urls.begin(); itr != vect_urls.end(); ++itr) {
+			if (itr->empty()) {
+				continue; //如果空值就跳过，不查询
+			}
+			char buf_url[1534];
+			int ret = mysql_real_escape_string(pMysql, buf_url, itr->c_str(), itr->size());
+			std::string fd_url_str = std::string(buf_url, ret);
+			sql.append("`url` = '").append(fd_url_str).append("' or ");
+		}
+	}
+	sql = sql.substr(0, sql.size() - 4);
+
+	// 执行sql查询，并返回查询结果
+	if (mysql_real_query(pMysql, sql.c_str(), sql.size()) != 0) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":5,\"msg\":\"实行sql查询失败("));
+		bytes_append(response_body, mysql_error(pMysql));
+		bytes_append(response_body, ")\"}");
+		return 200;
+	}
+	MYSQL_RES *result = mysql_store_result(pMysql);
+	if (result == NULL) {
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":6,\"msg\":\"获取sql查询结果失败\"}"));
+		return 200;
+	}
+
+	/*返回了多少行*/
+	unsigned long long rows = mysql_num_rows(result);
+	std::string rowstr = std::to_string(rows);
+	if (rows < 1) {
+		mysql_free_result(result);
+		bytes_append(response_body,
+			LITERAL_STRING_U8(u8"{\"status\":7,\"msg\":\"未找到对应的记录\"}"));
+		return 200;
+	}
+
+	/*查询到的结果*/
+	rapidjson::StringBuffer strbuf;
+	strbuf.Reserve(rows * 5120);
+	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+	/*将获取到的结果写入json*/
+	writer.StartObject();
+
+	/*状态值为0*/
+	writer.Key("status");
+	writer.Int64(0);
+
+	/*成功的数目*/
+	writer.Key("okn");
+	writer.Int64(rows);
+
+
+	/*返回成功的元数据记录*/
+	writer.Key("metas");
+	writer.StartArray();  //数组形式
+
+	MYSQL_ROW rown = NULL;
+	while ((rown = mysql_fetch_row(result)) != NULL) {
+		writer.StartObject();
+		unsigned long *row_lens = mysql_fetch_lengths(result);  //每一列的长度
+
+		for (int i = 0; i < mysql_num_fields(result); ++i) {
+			const us_cms_metdata_map& field = metamaps[i];
+			std::string fieldname = metamaps[i].m_custon_field;  //用户可见的字段名
+			std::string fieldvalue = std::string(rown[i], row_lens[i]);  //获取字段值
+
+			if (fieldname == "url") {
+				std::vector<std::string>::iterator itr
+					= std::find(vect_urls.begin(), vect_urls.end(), fieldvalue); //查找url
+				if (itr != vect_urls.end()) {
+					itr->resize(0); // 未置空的是失败的url
+				}
+			}
+
+			// 外包框跳过
+			if (fieldname == "MaxX" || fieldname == "MinX" ||
+				fieldname == "MaxY" || fieldname == "MinY") {
+				continue;
+			}
+			switch (field.m_type) {
+			case 2: /* 整数数值类型存储的字段 */
+			{
+				writer.Key(fieldname.c_str());
+				writer.Int64(atoi(fieldvalue.c_str()));
+			}
+			break;
+			case 3: /* 浮点数数值类型存储的字段 */
+			{
+				writer.Key(fieldname.c_str());
+				writer.Double(atof(fieldvalue.c_str()));
+			}
+			break;
+			default: /* 按字符串类型存储的字段 */
+			{
+				writer.Key(fieldname.c_str());
+				writer.String(fieldvalue.c_str());
+			}
+			break;
+			}
+		}
+		writer.EndObject();
+	}
+	writer.EndArray();
+
+	/*查询失败的部分*/
+	int failn = 0;
+
+	/*查询失败的id*/
+	writer.Key("fails");
+	writer.StartObject();
+
+	/*查询失败的url*/
+	writer.Key("urls");
+	writer.StartArray();
+	int failed_urln = 0;
+	for (auto itr = vect_urls.begin(); itr != vect_urls.end(); ++itr) {
+		if (!itr->empty()) {
+			writer.String(itr->c_str(), itr->size());
+			failed_urln++;
+		}
+	}
+	writer.EndArray();
+	writer.EndObject();
+
+	/*查询失败的数目*/
+	writer.Key("failn");
+	writer.Int64(/*failed_idn +*/ failed_urln);
+
+	writer.EndObject();
+
+	bytes_append(response_body, (uint8_t*)strbuf.GetString(), strbuf.GetSize());
+
+	mysql_free_result(result);
+
+	return 200;
+}
+

@@ -1,0 +1,23 @@
+﻿<Metadatafile>
+  <BasicDataContent>
+    <MetaDataFileName>GF1147121520160316Y.XML</MetaDataFileName>
+	<DataFormat>tiff</DataFormat>
+    <ImgRange>((1199999.92,2502027.47 1200153.52,2502027.47 1200153.52,2502181.07 1199999.92,2502181.07 1199999.92,2502027.47))</ImgRange>
+    <MathFoundation>
+      <LongerRadius>6378137.0000</LongerRadius>
+      <OblatusRatio>1/298.257222101</OblatusRatio>
+      <GeodeticDatum>2000国家大地坐标系</GeodeticDatum>
+      <MapProjection>高斯-克吕格投影</MapProjection>
+      <CentralMederian>111</CentralMederian>
+      <ZoneDivisionMode>6度带</ZoneDivisionMode>
+      <GaussKrugerZoneNo>19</GaussKrugerZoneNo>
+      <CoordinationUnit>米</CoordinationUnit>
+      <HeightSystem>正常高</HeightSystem>
+      <HeightDatum>1985国家高程基准</HeightDatum>
+    </MathFoundation>
+	<ImgSource>卫片</ImgSource>
+	<PhotoDate>20130211</PhotoDate>
+	<DigitalPhotoResolution>0.05</DigitalPhotoResolution>
+	<SateName>GF-1</SateName>
+  </BasicDataContent>
+</Metadatafile>
