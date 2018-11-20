@@ -1,0 +1,22 @@
+﻿#ifndef __US_MAP_COMPRESSION_PACKAGE_HPP__
+#define __US_MAP_COMPRESSION_PACKAGE_HPP__
+
+#ifndef __US_DATA_PROCESS_HPP__
+#include "us_data_process.hpp"
+#endif
+
+typedef void* usmcp_handler;
+
+namespace unispace
+{
+    _US_DATA_PROCESS_DLL usmcp_handler us_mcp_open(const char* filename);
+    _US_DATA_PROCESS_DLL void us_mcp_close(usmcp_handler handler);
+
+    _US_DATA_PROCESS_DLL int64_t us_mcp_read_rgba_data(
+        usmcp_handler handler, int nXOff, int nYOff, int nXSize, int nYSize,
+        void* pData, int nBufXSize, int nBufYSize);
+    _US_DATA_PROCESS_DLL bool us_mcp_get_geo_transform(usmcp_handler handler, double* padfGeoTransform);
+}
+
+#endif // !__US_MAP_COMPRESSION_PACKAGE_HPP__
+
