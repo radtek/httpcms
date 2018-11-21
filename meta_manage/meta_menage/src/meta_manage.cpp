@@ -15,6 +15,7 @@
 #include <rapidjson/reader.h>
 #include <string>
 
+
 static std::string strError;
 static std::string sResult;
 
@@ -177,7 +178,7 @@ const char* meta_manage::get_img_idurls(const void* pMng, long int from, long in
 	strbuf.Reserve(1024);
 	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
 	writer.StartObject();
-	writer.Key("img_id_urls");
+	writer.Key("primary_keys");
 	writer.StartArray();
 	for (std::vector<unispace::IMG_INDEX>::const_iterator itr = imgIdx.begin();
 		itr != imgIdx.end(); ++itr)
@@ -185,7 +186,7 @@ const char* meta_manage::get_img_idurls(const void* pMng, long int from, long in
 		writer.StartObject();
 		writer.Key("id");
 		writer.String(itr->uuid.to_brief_string().c_str());
-		writer.Key("url");
+		writer.Key("str");
 		writer.String(itr->url.c_str());
 		writer.EndObject();
 	}
@@ -566,7 +567,7 @@ const char* meta_manage::get_dataset_idnames(const void* pMng, long int from, lo
 	strbuf.Reserve(1024);
 	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
 	writer.StartObject();
-	writer.Key("dset_id_names");
+	writer.Key("primary_keys");
 	writer.StartArray();
 
 	for (std::vector<unispace::DATASET_INDEX>::const_iterator itr = dsetIdx.begin();
@@ -575,7 +576,7 @@ const char* meta_manage::get_dataset_idnames(const void* pMng, long int from, lo
 		writer.StartObject();
 		writer.Key("id");
 		writer.String(itr->uuid.to_brief_string().c_str());
-		writer.Key("name");
+		writer.Key("str");
 		writer.String(itr->name.c_str());
 		writer.EndObject();
 	}
@@ -1031,7 +1032,7 @@ const char* meta_manage::get_wmts_idlayers(const void* pMng, long int from, long
 	strbuf.Reserve(1024);
 	rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
 	writer.StartObject();
-	writer.Key("dset_id_names");
+	writer.Key("primary_keys");
 	writer.StartArray();
 
 	for (std::vector<unispace::WMTS_INDEX>::const_iterator itr = wmtsIdx.begin();
@@ -1040,7 +1041,7 @@ const char* meta_manage::get_wmts_idlayers(const void* pMng, long int from, long
 		writer.StartObject();
 		writer.Key("id");
 		writer.String(itr->uuid.to_brief_string().c_str());
-		writer.Key("layer");
+		writer.Key("str");
 		writer.String(itr->layer.c_str());
 		writer.EndObject();
 	}
@@ -1386,3 +1387,5 @@ void meta_manage::destroy_manager(const void* pMng)
 		mng->destory(mng);
 	}
 }
+
+
